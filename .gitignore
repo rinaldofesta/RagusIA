@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+.env
+.env*.local
+.DS_Store
+npm-debug.log*
+supabase/.branches/
+supabase/.temp/
+drizzle/.cache/
+*.tsbuildinfo
