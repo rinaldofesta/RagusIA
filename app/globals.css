@@ -1,26 +1,70 @@
 @import "tailwindcss";
 
+/* ===== Design tokens (RagusIA) ===== */
+@theme {
+  --color-ink: #1C1A17;
+  --color-ink-2: #5C554B;
+  --color-ink-3: #8A8175;
+  --color-paper: #F4EFE6;
+  --color-card: #FBF8F1;
+  --color-card-2: #FDFBF6;
+  --color-sand: #EAE3D5;
+  --color-sand-2: #E3DACA;
+  --color-line: rgba(28, 26, 23, 0.10);
+  --color-line-2: rgba(28, 26, 23, 0.17);
+  --color-amber: #C2972A;
+  --color-amber-d: #9B7517;
+  --color-amber-tint: #EFE1BC;
+  --color-teal: #2A66A8;
+  --color-terra: #C0623D;
+  --color-olive: #7E7A3F;
+  --color-stone: #9B9385;
+  --color-sky: #5B8CA3;
+  --color-plum: #7A5160;
+
+  --font-spectral: var(--font-spectral), serif;
+  --font-spectral-sc: var(--font-spectral-sc), serif;
+  --font-hanken: var(--font-hanken), system-ui, sans-serif;
+  --font-mono: var(--font-mono), monospace;
+}
+
+/* Raw CSS vars for inline/bespoke usage (graph, map, prose) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #1C1A17; --ink-2: #5C554B; --ink-3: #8A8175; --paper: #F4EFE6;
+  --card: #FBF8F1; --card-2: #FDFBF6; --sand: #EAE3D5; --sand-2: #E3DACA;
+  --line: rgba(28, 26, 23, 0.10); --line-2: rgba(28, 26, 23, 0.17);
+  --amber: #C2972A; --amber-d: #9B7517; --amber-tint: #EFE1BC; --teal: #2A66A8;
+  --terra: #C0623D; --olive: #7E7A3F; --stone: #9B9385; --sky: #5B8CA3; --plum: #7A5160;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+/* ===== Keyframes ===== */
+@keyframes ibFadeUp { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ibBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.15; } }
+@keyframes ibShimmer { 0% { background-position: -280px 0; } 100% { background-position: 280px 0; } }
+@keyframes ibSlideL { from { transform: translateX(26px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes ibFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ibPulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ===== Base ===== */
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  font-family: var(--font-hanken), system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
 }
+::selection { background: rgba(194, 151, 42, 0.22); }
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-thumb { background: rgba(28, 26, 23, 0.18); border-radius: 7px; border: 3px solid #F4EFE6; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* ===== Leaflet overrides ===== */
+.leaflet-container { background: #0F1410; font-family: var(--font-hanken), sans-serif; }
+.ib-pin { background: none !important; border: none !important; }
+.leaflet-bar a { background: #26201A; color: #EDE6D8; border-color: rgba(237, 230, 216, 0.14); }
+.leaflet-bar a:hover { background: #332B22; color: #fff; }
+.leaflet-control-attribution { background: rgba(20, 17, 13, 0.72) !important; color: rgba(237, 230, 216, 0.55) !important; font: 400 9px var(--font-mono), monospace; padding: 1px 6px; }
+.leaflet-control-attribution a { color: rgba(216, 154, 62, 0.85) !important; }
