@@ -32,7 +32,7 @@ export default async function AppaltiPage() {
           className="text-[18px] text-amber-d flex-none"
         />
         <div className="flex-1 font-hanken text-[12px] leading-[1.4] font-medium text-ink">
-          Ingestione a rischio · la fonte ANAC ha restituito <strong className="font-bold">0 righe</strong> all&rsquo;ultimo refresh (atteso 284). I valori mostrati sono dell&rsquo;ultimo snapshot valido del 29/06.
+          Ingestione a rischio · la fonte ANAC ha restituito <strong className="font-bold">0 righe</strong>{" "}all&rsquo;ultimo refresh (atteso 284). I valori mostrati sono dell&rsquo;ultimo snapshot valido del 29/06.
         </div>
         <ProvButton
           sourceId="anac"
