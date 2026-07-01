@@ -136,6 +136,16 @@ export const opencoesioneAdapter: LiveAdapter<CoesioneData> = {
       .update(t.domainDetails)
       .set({ kpis, chart })
       .where(eq(t.domainDetails.slug, "opere"));
+
+    // Query substrate: coesione interventi per stato as flat rows.
+    await db.delete(t.factCoesione).where(eq(t.factCoesione.sourceId, "opencoesione"));
+    const factRows = [
+      { stato: "non avviato", progetti: status.non_avviato, sourceId: "opencoesione" },
+      { stato: "in corso", progetti: status.in_corso, sourceId: "opencoesione" },
+      { stato: "liquidato", progetti: status.liquidato, sourceId: "opencoesione" },
+      { stato: "concluso", progetti: status.concluso, sourceId: "opencoesione" },
+    ].filter((r) => r.progetti > 0);
+    if (factRows.length) await db.insert(t.factCoesione).values(factRows).onConflictDoNothing();
   },
 };
 

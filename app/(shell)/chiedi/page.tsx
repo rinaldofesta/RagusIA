@@ -6,7 +6,10 @@ import {
   routeQuestion,
 } from "@/lib/data/repository";
 import type { QaBody } from "@/lib/model/types";
+import { answerWithSql } from "@/lib/query/engine";
+import { isQueryEnabled } from "@/lib/query/provider";
 import { AnswerView } from "@/components/features/AnswerView";
+import { SqlResults, SqlSources } from "@/components/features/answers/SqlAnswer";
 import { Giunta } from "@/components/features/answers/Giunta";
 import { Bilancio } from "@/components/features/answers/Bilancio";
 import { Appalti } from "@/components/features/answers/Appalti";
@@ -53,6 +56,26 @@ export default async function ChiediAnswerPage({
       );
     }
     id = "nomatch";
+  }
+
+  // ---- NL→SQL engine: try a live generated query before falling back to nomatch ----
+  if (id === "nomatch" && q && isQueryEnabled()) {
+    const result = await answerWithSql(q);
+    if (result && result.rows.length > 0) {
+      const srcs = (await Promise.all(result.sourceIds.map(getSource))).filter(
+        (s): s is NonNullable<typeof s> => !!s,
+      );
+      return (
+        <AnswerView
+          question={q}
+          thinkingMeta="lo schema civico"
+          evidence={<SqlSources sources={srcs} />}
+          sql={<SqlReveal sql={result.sql} />}
+        >
+          <SqlResults result={result} />
+        </AnswerView>
+      );
+    }
   }
 
   // ---- QA / nomatch answer (prose + shared evidence + sql) ----

@@ -136,6 +136,16 @@ export const openpnrrAdapter: LiveAdapter<PnrrData> = {
       .update(t.domainCards)
       .set({ value: itNum(total + 116), sub: `${itNum(total)} PNRR · 116 coesione` })
       .where(eq(t.domainCards.slug, "pnrr"));
+
+    // Query substrate: PNRR projects per missione as flat rows.
+    await db.delete(t.factPnrr).where(eq(t.factPnrr.sourceId, "openpnrr"));
+    const factRows = MISSIONI.map((m) => ({
+      missioneCode: m.code,
+      missioneLabel: m.label,
+      progetti: perMissione[m.code],
+      sourceId: "openpnrr",
+    }));
+    if (factRows.length) await db.insert(t.factPnrr).values(factRows).onConflictDoNothing();
   },
 };
 

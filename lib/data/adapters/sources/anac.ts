@@ -161,6 +161,25 @@ export const anacAdapter: LiveAdapter<AnacData> = {
       .update(t.domainCards)
       .set({ value: euroMln(totalValue), sub: `${itNum(n)} contratti · ${observedLabel()}` })
       .where(eq(t.domainCards.slug, "appalti"));
+
+    // Query substrate: all contracts as flat rows (for the NL→SQL engine).
+    await db.delete(t.factContracts).where(eq(t.factContracts.sourceId, "anac"));
+    if (contratti.length) {
+      const rows = contratti.map((c) => ({
+        cig: c.cig,
+        oggetto: c.oggetto,
+        importo: c.importo,
+        tipologia: titleCase(c.tipologia),
+        ufficio: c.ufficio,
+        anno: /^(\d{4})/.exec(c.data)?.[1] ? Number(/^(\d{4})/.exec(c.data)![1]) : null,
+        data: c.data,
+        sourceId: "anac",
+      }));
+      // chunked insert (dedup by cig already done in fetch)
+      for (let i = 0; i < rows.length; i += 500) {
+        await db.insert(t.factContracts).values(rows.slice(i, i + 500)).onConflictDoNothing();
+      }
+    }
   },
 };
 

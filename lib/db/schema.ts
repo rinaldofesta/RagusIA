@@ -231,3 +231,56 @@ export const embeddings = pgTable("embeddings", {
   content: text("content").notNull(),
   embedding: vector("embedding", { dim: 1536 }),
 });
+
+// Ingestion run history + count-guard. One row per source per `pnpm ingest`
+// pass. `guard` flags a suspicious row-count change vs the previous run
+// (the "ieri 2.000 righe, oggi 0 → alert" protection against silent failures).
+export const ingestRuns = pgTable("ingest_runs", {
+  id: text("id").primaryKey(),
+  sourceId: text("source_id").notNull(),
+  ranAt: text("ran_at").notNull(),
+  status: text("status").$type<"ok" | "warn">().notNull(),
+  rows: integer("rows").notNull(),
+  prevRows: integer("prev_rows"),
+  delta: integer("delta"),
+  guard: text("guard").$type<"first" | "ok" | "drop" | "empty">().notNull(),
+  note: text("note"),
+});
+
+// ---------- Query substrate: flat "fact" tables for the NL→SQL engine ----------
+// The domain tables above store UI-shaped jsonb blobs. These flat tables expose
+// the same facts as rows the LLM can JOIN across sources. Populated by the live
+// adapters + a seedFacts() baseline. NOTE: fact_contracts has NO aggiudicatario
+// (winner) column — that data (758 MB ANAC file) is not ingested.
+export const factContracts = pgTable("fact_contracts", {
+  cig: text("cig").primaryKey(),
+  oggetto: text("oggetto").notNull(),
+  importo: doublePrecision("importo").notNull(),
+  tipologia: text("tipologia").notNull(), // Lavori | Servizi | Forniture
+  ufficio: text("ufficio").notNull(),
+  anno: integer("anno"),
+  data: text("data"),
+  sourceId: text("source_id").notNull().default("anac"),
+});
+
+export const factBudget = pgTable("fact_budget", {
+  id: text("id").primaryKey(), // `${anno}:${missione_code}`
+  missioneCode: text("missione_code").notNull(),
+  missioneLabel: text("missione_label").notNull(),
+  importo: doublePrecision("importo").notNull(),
+  anno: integer("anno").notNull(),
+  sourceId: text("source_id").notNull().default("bdap"),
+});
+
+export const factPnrr = pgTable("fact_pnrr", {
+  missioneCode: text("missione_code").primaryKey(),
+  missioneLabel: text("missione_label").notNull(),
+  progetti: integer("progetti").notNull(),
+  sourceId: text("source_id").notNull().default("openpnrr"),
+});
+
+export const factCoesione = pgTable("fact_coesione", {
+  stato: text("stato").primaryKey(),
+  progetti: integer("progetti").notNull(),
+  sourceId: text("source_id").notNull().default("opencoesione"),
+});

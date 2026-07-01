@@ -151,6 +151,21 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
     // trend + capitoli are not in the mission-summary CSV — keep the curated ones.
     await db.update(t.bilancio).set({ missioni: bars, kpis }).where(eq(t.bilancio.id, "default"));
     await db.update(t.domainCards).set({ value: `€${mln(totale)}M` }).where(eq(t.domainCards.slug, "bilancio"));
+
+    // Query substrate: spesa per missione as flat rows.
+    await db.delete(t.factBudget).where(eq(t.factBudget.sourceId, "bdap"));
+    const factRows = missioni.map((m) => {
+      const meta = MISSIONE_META[m.code] ?? { label: m.code, color: "", entityId: "" };
+      return {
+        id: `${YEAR}:M${m.code}`,
+        missioneCode: `M${m.code}`,
+        missioneLabel: meta.label,
+        importo: m.amount,
+        anno: YEAR,
+        sourceId: "bdap",
+      };
+    });
+    if (factRows.length) await db.insert(t.factBudget).values(factRows).onConflictDoNothing();
   },
 };
 

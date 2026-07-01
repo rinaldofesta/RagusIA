@@ -8,10 +8,10 @@
 // This is a SCRIPT-ONLY concern (run via `pnpm ingest`), like the seed runner.
 // The app never imports it; surfaces read the resulting rows via the repository.
 
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { parse } from "csv-parse/sync";
 import { db } from "@/lib/db/client";
-import { sources } from "@/lib/db/schema";
+import { sources, ingestRuns } from "@/lib/db/schema";
 
 export interface FetchOutcome<T = unknown> {
   /** true when live data was retrieved and normalized successfully. */
@@ -150,11 +150,57 @@ async function updateProvenance(
   await db.update(sources).set(patch).where(eq(sources.id, id));
 }
 
+export type GuardVerdict = "first" | "ok" | "drop" | "empty";
+
 export interface IngestReport {
   id: string;
   status: "ok" | "warn";
   rows: number;
+  guard: GuardVerdict;
   note?: string;
+}
+
+/** The last-successful row count for a source, from ingest_runs (integer, avoids
+ *  the Italian-formatted `sources.rows` string). */
+async function prevRowCount(sourceId: string): Promise<number | null> {
+  const [last] = await db
+    .select({ rows: ingestRuns.rows, status: ingestRuns.status })
+    .from(ingestRuns)
+    .where(eq(ingestRuns.sourceId, sourceId))
+    .orderBy(desc(ingestRuns.ranAt))
+    .limit(1);
+  return last && last.status === "ok" ? last.rows : null;
+}
+
+/** Count-guard: compare this run's rows to the previous successful count. */
+export function guardVerdict(prev: number | null, now: number): GuardVerdict {
+  if (prev === null || prev === 0) return "first";
+  if (now === 0) return "empty";
+  if (now < prev * 0.5) return "drop";
+  return "ok";
+}
+
+let runSeq = 0;
+async function recordRun(
+  sourceId: string,
+  ranAt: string,
+  status: "ok" | "warn",
+  rows: number,
+  prev: number | null,
+  guard: GuardVerdict,
+  note?: string,
+): Promise<void> {
+  await db.insert(ingestRuns).values({
+    id: `${sourceId}:${ranAt}:${runSeq++}`,
+    sourceId,
+    ranAt,
+    status,
+    rows,
+    prevRows: prev,
+    delta: prev === null ? null : rows - prev,
+    guard,
+    note: note ?? null,
+  });
 }
 
 /** Run the given adapters; returns a per-source report. Never throws for one bad source. */
@@ -162,10 +208,13 @@ export async function runIngest(adapters: LiveAdapter[]): Promise<IngestReport[]
   const reports: IngestReport[] = [];
   for (const a of adapters) {
     const now = new Date();
+    const ranAt = fmtRefresh(now);
+    const prev = await prevRowCount(a.id);
     try {
       const out = await a.fetch();
       if (out.ok && out.data !== undefined) {
         await a.apply(out.data);
+        const guard = guardVerdict(prev, out.rows);
         await updateProvenance(a.id, {
           status: "ok",
           rows: String(out.rows),
@@ -173,19 +222,27 @@ export async function runIngest(adapters: LiveAdapter[]): Promise<IngestReport[]
           retrieved: fmtDate(now),
           refresh: fmtRefresh(now),
         });
+        await recordRun(a.id, ranAt, "ok", out.rows, prev, guard);
         console.log(`  ✓ ${a.id.padEnd(12)} ${a.feeds} · ${out.rows} righe · osservato ${out.observed}`);
-        reports.push({ id: a.id, status: "ok", rows: out.rows });
+        if (guard === "drop" || guard === "empty") {
+          console.warn(
+            `  ⚠ COUNT-GUARD [${guard}] ${a.id}: ${prev} → ${out.rows} righe (Δ ${out.rows - (prev ?? 0)}) — verifica la fonte`,
+          );
+        }
+        reports.push({ id: a.id, status: "ok", rows: out.rows, guard });
       } else {
         const note = out.note ?? "ingestione fallita";
         await updateProvenance(a.id, { status: "warn", refresh: `${fmtRefresh(now)} · ${note}` });
+        await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
         console.log(`  ⚠ ${a.id.padEnd(12)} ${a.feeds} · a rischio (${note}) — dati precedenti conservati`);
-        reports.push({ id: a.id, status: "warn", rows: 0, note });
+        reports.push({ id: a.id, status: "warn", rows: 0, guard: "empty", note });
       }
     } catch (e) {
       const note = (e as Error).message.slice(0, 80);
       await updateProvenance(a.id, { status: "warn", refresh: `${fmtRefresh(now)} · errore` });
+      await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
       console.log(`  ✗ ${a.id.padEnd(12)} ${a.feeds} · errore: ${note} — dati precedenti conservati`);
-      reports.push({ id: a.id, status: "warn", rows: 0, note });
+      reports.push({ id: a.id, status: "warn", rows: 0, guard: "empty", note });
     }
   }
   return reports;

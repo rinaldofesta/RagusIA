@@ -2,7 +2,7 @@
 // object model from Postgres (Drizzle) and returns typed model objects. No
 // surface imports seed JSON, Drizzle tables, or adapters directly.
 
-import { eq, sql as dsql } from "drizzle-orm";
+import { eq, sql as dsql, desc } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
 import { buildGraph } from "@/lib/graph/layout";
@@ -24,6 +24,28 @@ const FONTI_ORDER = [
 ] as const;
 
 const LAST_REFRESH = "30/06 03:12"; // sidebar footer (design line ~84)
+
+// ---------- Ingestion runs (count-guard history) ----------
+export interface IngestRun {
+  sourceId: string;
+  ranAt: string;
+  status: "ok" | "warn";
+  rows: number;
+  prevRows: number | null;
+  delta: number | null;
+  guard: "first" | "ok" | "drop" | "empty";
+  note: string | null;
+}
+export async function getIngestRuns(sourceId?: string, limit = 30): Promise<IngestRun[]> {
+  const base = db.select().from(t.ingestRuns).orderBy(desc(t.ingestRuns.ranAt)).limit(limit);
+  const rows = sourceId
+    ? await db.select().from(t.ingestRuns).where(eq(t.ingestRuns.sourceId, sourceId)).orderBy(desc(t.ingestRuns.ranAt)).limit(limit)
+    : await base;
+  return rows.map((r) => ({
+    sourceId: r.sourceId, ranAt: r.ranAt, status: r.status, rows: r.rows,
+    prevRows: r.prevRows, delta: r.delta, guard: r.guard, note: r.note,
+  }));
+}
 
 // ---------- Sources / provenance ----------
 export async function getSources(): Promise<Source[]> {

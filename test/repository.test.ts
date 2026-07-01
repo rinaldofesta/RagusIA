@@ -4,12 +4,12 @@
 import { expect, test } from "vitest";
 import * as repo from "@/lib/data/repository";
 
-test("getSourceHealth: 12-source registry, ANAC at risk", async () => {
+test("getSourceHealth: 12-source registry, ok+warn accounted, atRisk matches warn", async () => {
+  // Invariant across seed/live: 12 registry sources; ok+warn = 12; atRisk lists the warn ones.
   const h = await repo.getSourceHealth();
   expect(h.total).toBe(12);
-  expect(h.warn).toBe(1);
-  expect(h.ok).toBe(11);
-  expect(h.atRisk).toContain("ANAC");
+  expect(h.ok + h.warn).toBe(12);
+  expect(h.atRisk).toHaveLength(h.warn);
 });
 
 test("getNav returns the six surfaces in order", async () => {
@@ -26,11 +26,12 @@ test("getDominiCards: 8 cards, bilancio+appalti are full", async () => {
   expect(cards.find((c) => c.slug === "appalti")?.status).toBe("warn");
 });
 
-test("getBilancio: 12 missioni, M01 is the largest bar", async () => {
+test("getBilancio: 12+ missioni, sorted with the top bar at pct 100", async () => {
+  // Invariant across seed/live: the largest mission has pct 100 and a valid ARCONET code.
   const b = await repo.getBilancio();
   expect(b.missioni.length).toBeGreaterThanOrEqual(12);
-  expect(b.missioni[0].code).toBe("M01");
   expect(b.missioni[0].pct).toBe(100);
+  expect(b.missioni[0].code).toMatch(/^M\d/);
 });
 
 test("getGraph: center node centered, links non-empty", async () => {
@@ -48,8 +49,10 @@ test("routeQuestion: deterministic routing (no embeddings)", async () => {
   expect((await repo.routeQuestion("colore preferito del gatto?")).kind).toBe("nomatch");
 });
 
-test("getOperatore: Iblea has contracts", async () => {
+test("getOperatore: returns the { meta, contratti } shape", async () => {
+  // Post-ANAC-live the appalti panel holds tipologia (no per-operatore winners),
+  // so this asserts the shape rather than seed-specific values.
   const op = await repo.getOperatore("op-iblea");
-  expect(op.meta?.value).toBe("€4,9M");
-  expect(op.contratti.length).toBeGreaterThan(0);
+  expect(op).toHaveProperty("meta");
+  expect(Array.isArray(op.contratti)).toBe(true);
 });

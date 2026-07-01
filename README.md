@@ -38,6 +38,18 @@ public source ──adapter──▶ normalize ──▶ repository ──▶ UI
 - **Semantic search** (Chiedi routing, Documenti) uses **pgvector** when an embedding provider is
   configured, and falls back to a deterministic keyword matcher otherwise — so the app runs with
   **zero external keys**.
+- **NL→SQL query engine** (`lib/query/`): for a free-text question the curated matcher can't answer,
+  the app has Claude generate one read-only `SELECT` over flat **fact tables** (`fact_contracts`,
+  `fact_budget`, `fact_pnrr`, `fact_coesione` + `entities`/`sources`), executes it in a **read-only
+  transaction** (statement timeout + row cap + single-SELECT validator), and renders the real SQL +
+  results + provenance chips. Enabled with `QUERY_PROVIDER=gateway` (Vercel AI Gateway); with no
+  provider the app falls back to the curated matcher (keyless). The fact tables are populated by the
+  live adapters and a `seedFacts()` baseline.
+- **Ingestion count-guard**: every `pnpm ingest` records an `ingest_runs` row and compares the row
+  count to the previous successful run — a drop to 0 or a >50% fall emits a loud `⚠ COUNT-GUARD`
+  alert (protection against a source silently emptying). A scheduled **GitHub Action**
+  (`.github/workflows/ingest.yml`) runs the ingest daily (it needs real curl + memory for the heavy
+  ANAC/BDAP downloads, so it runs there rather than on Vercel Cron).
 
 ## Local setup
 

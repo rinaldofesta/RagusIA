@@ -7,6 +7,7 @@ import { db, sql } from "./client";
 import * as t from "./schema";
 import * as seed from "@/lib/data/seed";
 import { embedText, isEmbeddingsEnabled } from "@/lib/search/embeddings";
+import { seedFacts } from "@/lib/data/facts";
 
 function withOrd<T>(rows: T[]): (T & { ord: number })[] {
   return rows.map((r, i) => ({ ...r, ord: i }));
@@ -92,6 +93,9 @@ async function run() {
   } else {
     console.log("· embeddings skipped (EMBEDDINGS_PROVIDER unset) — deterministic fallback");
   }
+
+  await seedFacts();
+  console.log("· fact tables seeded (query substrate)");
 
   console.log("✓ seed complete");
 }
