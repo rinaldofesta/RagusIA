@@ -49,7 +49,7 @@ export default async function FontiPage() {
               {health.warn}
             </div>
             <span className="font-hanken text-[11px] font-medium text-ink-2">
-              ANAC · 0 righe oggi
+              {health.atRisk.length ? health.atRisk.join(", ") : "tutte verificate"}
             </span>
           </div>
         </div>

@@ -98,6 +98,37 @@ export async function curlJson<J = unknown>(url: string, opts?: Parameters<typeo
   return JSON.parse(await curlText(url, opts)) as J;
 }
 
+// Desktop Chrome UA — some portals (ANAC) sit behind a WAF that rejects
+// non-browser clients. curl with this UA passes; Node's fetch may be blocked.
+const BROWSER_UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
+
+/** JSON via curl with a browser UA (for WAF-protected APIs). */
+export async function curlJsonBrowser<J = unknown>(url: string, timeoutSec = 45): Promise<J> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { stdout } = await run(
+    "curl",
+    ["-sS", "-f", "--max-time", String(timeoutSec), "-H", "Accept: application/json", "-A", BROWSER_UA, url],
+    { maxBuffer: 256 * 1024 * 1024 },
+  );
+  return JSON.parse(stdout) as J;
+}
+
+/** Download a binary file (e.g. a zip) via curl with a browser UA → bytes. */
+export async function curlBuffer(url: string, timeoutSec = 180): Promise<Uint8Array> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { stdout } = await run(
+    "curl",
+    ["-sS", "-f", "--max-time", String(timeoutSec), "-A", BROWSER_UA, url],
+    { maxBuffer: 512 * 1024 * 1024, encoding: "buffer" },
+  );
+  return new Uint8Array(stdout as Buffer);
+}
+
 /** Parse a delimited gov CSV into row objects (auto-detects ; vs , when delimiter omitted). */
 export function parseCsv(text: string, delimiter?: string): Record<string, string>[] {
   const delim = delimiter ?? (text.slice(0, 2000).split("\n")[0].includes(";") ? ";" : ",");

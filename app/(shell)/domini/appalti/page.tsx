@@ -1,9 +1,13 @@
-import { getAppalti } from "@/lib/data/repository";
-import { Breadcrumb, Icon, KpiCard, BarRow, SectionCard, EntityRef } from "@/components/primitives/kit";
+import { getAppalti, getSource } from "@/lib/data/repository";
+import { Breadcrumb, Icon, KpiCard, BarRow, SectionCard } from "@/components/primitives/kit";
 import { ProvButton } from "@/components/features/ProvButton";
 
 export default async function AppaltiPage() {
-  const { kpis, operatori, uffici, contratti } = await getAppalti();
+  const [{ kpis, operatori, uffici, contratti }, anac] = await Promise.all([
+    getAppalti(),
+    getSource("anac"),
+  ]);
+  const anacAtRisk = anac?.status === "warn";
 
   return (
     <div className="max-w-[1180px] mx-auto px-9 pt-6 pb-[70px]">
@@ -20,28 +24,31 @@ export default async function AppaltiPage() {
             Appalti &amp; Contratti
           </h1>
           <p className="font-hanken text-[13px] text-ink-2 m-0">
-            Contratti pubblici ≥ €40.000 dal 2019 · Comune di Ragusa
+            Contratti pubblici del Comune di Ragusa · dati ANAC (BDNCP)
           </p>
         </div>
       </div>
 
-      <div className="flex items-center gap-[11px] bg-[rgba(194,151,42,0.07)] border border-[rgba(194,151,42,0.22)] rounded-[11px] px-[14px] py-[11px] mb-[18px]">
-        <Icon
-          name="ph-warning-circle"
-          weight="fill"
-          className="text-[18px] text-amber-d flex-none"
-        />
-        <div className="flex-1 font-hanken text-[12px] leading-[1.4] font-medium text-ink">
-          Ingestione a rischio · la fonte ANAC ha restituito <strong className="font-bold">0 righe</strong>{" "}all&rsquo;ultimo refresh (atteso 284). I valori mostrati sono dell&rsquo;ultimo snapshot valido del 29/06.
+      {anacAtRisk && (
+        <div className="flex items-center gap-[11px] bg-[rgba(194,151,42,0.07)] border border-[rgba(194,151,42,0.22)] rounded-[11px] px-[14px] py-[11px] mb-[18px]">
+          <Icon
+            name="ph-warning-circle"
+            weight="fill"
+            className="text-[18px] text-amber-d flex-none"
+          />
+          <div className="flex-1 font-hanken text-[12px] leading-[1.4] font-medium text-ink">
+            Ingestione a rischio · l&rsquo;ultimo aggiornamento della fonte ANAC non è andato a buon
+            fine. I valori mostrati sono dell&rsquo;ultimo snapshot valido{anac?.refresh ? ` · ${anac.refresh}` : ""}.
+          </div>
+          <ProvButton
+            sourceId="anac"
+            what="Stato ingestione ANAC"
+            className="font-hanken text-[11px] font-semibold text-amber-d bg-transparent border border-[rgba(194,151,42,0.4)] rounded-lg px-[11px] py-[6px] cursor-pointer flex-none hover:bg-[rgba(194,151,42,0.12)] transition-colors"
+          >
+            Vedi fonte
+          </ProvButton>
         </div>
-        <ProvButton
-          sourceId="anac"
-          what="Stato ingestione ANAC"
-          className="font-hanken text-[11px] font-semibold text-amber-d bg-transparent border border-[rgba(194,151,42,0.4)] rounded-lg px-[11px] py-[6px] cursor-pointer flex-none hover:bg-[rgba(194,151,42,0.12)] transition-colors"
-        >
-          Vedi fonte
-        </ProvButton>
-      </div>
+      )}
 
       <div className="grid grid-cols-4 gap-[13px] mb-4">
         {kpis.map((k, i) => (
@@ -56,7 +63,7 @@ export default async function AppaltiPage() {
                     sourceId: k.sourceId,
                     what: k.srcVal,
                     tag: k.srcTag ?? "",
-                    dot: k.est ? "est" : "warn",
+                    dot: k.est ? "est" : k.status === "warn" ? "warn" : "ok",
                   }
                 : undefined
             }
@@ -67,10 +74,10 @@ export default async function AppaltiPage() {
       <div className="grid grid-cols-2 gap-4 items-start">
         <SectionCard>
           <div className="font-hanken text-[13px] font-semibold text-ink mb-[3px]">
-            Top operatori economici
+            Per tipologia di contratto
           </div>
           <div className="font-hanken text-[11px] font-medium text-ink-3 mb-[15px]">
-            primi 5 su 196 · ≈ 38% del valore · clicca per la scheda
+            lavori · servizi · forniture · valore a base di gara
           </div>
           {operatori.map((b, i) => (
             <BarRow
@@ -82,10 +89,6 @@ export default async function AppaltiPage() {
               entityId={b.entityId}
             />
           ))}
-          <div className="font-hanken text-[10.5px] leading-[1.4] text-ink-3 mt-[13px]">
-            <Icon name="ph-info" className="text-[12px] align-[-1px]" /> Nomi degli operatori
-            illustrativi nel prototipo.
-          </div>
         </SectionCard>
 
         <SectionCard>
@@ -116,7 +119,7 @@ export default async function AppaltiPage() {
           <span>CIG</span>
           <span>Oggetto</span>
           <span className="text-right">Importo</span>
-          <span>Operatore</span>
+          <span>Tipologia</span>
           <span>Ufficio</span>
           <span>Fonte</span>
         </div>
@@ -128,12 +131,7 @@ export default async function AppaltiPage() {
             <span className="font-mono text-[11px] font-medium text-amber-d">{c.cig}</span>
             <span className="font-hanken text-[12px] font-medium text-ink">{c.ogg}</span>
             <span className="font-mono text-[12px] font-semibold text-ink text-right">{c.imp}</span>
-            <EntityRef
-              id={c.entityId}
-              className="font-hanken text-[11.5px] font-medium text-teal text-left underline decoration-[rgba(42,102,168,0.3)] underline-offset-2 hover:decoration-teal transition-colors"
-            >
-              {c.op}
-            </EntityRef>
+            <span className="font-hanken text-[11.5px] font-medium text-ink-2">{c.op}</span>
             <span className="font-hanken text-[11px] font-medium text-ink-3">{c.uff}</span>
             <ProvButton
               sourceId="anac"
