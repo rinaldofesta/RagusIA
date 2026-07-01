@@ -66,7 +66,7 @@ export default async function OrganigrammaPage() {
 
       {/* Giunta */}
       <div className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-ink-3 mb-3">
-        Giunta comunale · 9 assessori
+        Giunta comunale · {assessori.length} assessori
       </div>
       <div className="grid grid-cols-3 gap-3">
         {assessori.map((a, i) => (

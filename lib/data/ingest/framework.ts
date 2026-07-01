@@ -72,6 +72,32 @@ export async function fetchJson<J = unknown>(url: string, opts?: Parameters<type
   return JSON.parse(await fetchText(url, opts)) as J;
 }
 
+// Some government endpoints (notably ISTAT SDMX) return HTTP 500 to Node's
+// undici `fetch` while responding 200 to curl for the identical request — an
+// HTTP-client incompatibility, not a rate limit. Ingestion is a script-time
+// concern (never a request path), so shelling out to the system curl is a safe,
+// reliable fallback. `-f` makes curl exit non-zero on HTTP >= 400 → the caller's
+// try/catch degrades the source to `warn`, preserving last-good data.
+export async function curlText(
+  url: string,
+  opts: { timeoutSec?: number; accept?: string } = {},
+): Promise<string> {
+  const { execFile } = await import("node:child_process");
+  const { promisify } = await import("node:util");
+  const run = promisify(execFile);
+  const { timeoutSec = 30, accept = "application/json" } = opts;
+  const { stdout } = await run(
+    "curl",
+    ["-sS", "-f", "--max-time", String(timeoutSec), "-H", `Accept: ${accept}`, "-A", UA, url],
+    { maxBuffer: 64 * 1024 * 1024 },
+  );
+  return stdout;
+}
+
+export async function curlJson<J = unknown>(url: string, opts?: Parameters<typeof curlText>[1]): Promise<J> {
+  return JSON.parse(await curlText(url, opts)) as J;
+}
+
 /** Parse a delimited gov CSV into row objects (auto-detects ; vs , when delimiter omitted). */
 export function parseCsv(text: string, delimiter?: string): Record<string, string>[] {
   const delim = delimiter ?? (text.slice(0, 2000).split("\n")[0].includes(";") ? ";" : ",");

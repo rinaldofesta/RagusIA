@@ -18,6 +18,18 @@ export default async function BilancioPage() {
     trend.map((d, i) => `L${tx(i)},${ty(d.v)}`).join(" ") +
     ` L${tx(trend.length - 1)},${TH - 2} Z`;
 
+  // Corrente/capitale split — derived from the KPIs so it reconciles with live data.
+  const mlnOf = (label: string) => {
+    const k = kpis.find((x) => x.label.toLowerCase().includes(label));
+    const m = k?.value.match(/([\d.,]+)/);
+    return m ? Number(m[1].replace(/\./g, "").replace(",", ".")) : 0;
+  };
+  const correnteM = mlnOf("corrente");
+  const capitaleM = mlnOf("capitale");
+  const compTot = correnteM + capitaleM || 1;
+  const correntePct = Math.round((correnteM / compTot) * 100);
+  const fmtM = (m: number) => `€${m.toFixed(1).replace(".", ",")}M`;
+
   return (
     <div className="max-w-[1180px] mx-auto px-9 pt-6 pb-[70px]">
       <Breadcrumb trail={[{ label: "Domini", href: "/domini" }, { label: "Bilancio" }]} />
@@ -115,17 +127,17 @@ export default async function BilancioPage() {
               Composizione della spesa
             </div>
             <div className="h-[13px] rounded-[7px] overflow-hidden flex mb-3">
-              <div className="w-[79%] bg-teal" />
-              <div className="w-[21%] bg-amber" />
+              <div className="bg-teal" style={{ width: `${correntePct}%` }} />
+              <div className="bg-amber" style={{ width: `${100 - correntePct}%` }} />
             </div>
             <div className="flex justify-between font-hanken text-[11.5px] font-medium">
               <span className="inline-flex items-center gap-[6px] text-ink-2">
                 <span className="w-2 h-2 rounded-[2px] bg-teal" />
-                Corrente · €93,1M
+                Corrente · {fmtM(correnteM)}
               </span>
               <span className="inline-flex items-center gap-[6px] text-ink-2">
                 <span className="w-2 h-2 rounded-[2px] bg-amber" />
-                Capitale · €24,5M
+                Capitale · {fmtM(capitaleM)}
               </span>
             </div>
           </SectionCard>
