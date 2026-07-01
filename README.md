@@ -62,13 +62,37 @@ Embeddings are **off by default**. To enable semantic routing/search, set `EMBED
 `/domini` (+ `bilancio`, `appalti`, `organigramma`, `elezioni`, and `[slug]` detail) ·
 `/mappa` · `/documenti` · `/fonti` · `/entita/[id]`.
 
-## Phase 2 roadmap — live source adapters
+## Live data ingestion (Phase 2)
 
-Replace the Phase-1 seed adapters tier by tier, behind the same contract:
+Six sources now have **live adapters** that fetch real open data for the Comune di Ragusa,
+normalize it, and upsert it into Postgres behind the same repository contract. Run:
 
-- **Clean open APIs**: ISTAT (SDMX), OpenPNRR (Openpolis), OpenCoesione, Eligendo + DAIT, IndicePA, BDAP.
-- **Harder / less uniform**: ISPRA, EEA, MIM, ICCU.
-- **Not open data → curated links**: ANPR + Comune servizi (auth-gated portals), Albo Pretorio (scrape).
+```bash
+pnpm ingest            # refresh all live sources
+pnpm ingest istat bdap # refresh specific sources
+```
+
+Each pass updates that source's **real provenance + health**: success → `ok` with fresh
+retrieval date / row count; failure → the last-good data is preserved and the source flips to
+`warn` ("a rischio") — the design's ingestion-health model made real. A source that is down or
+rate-limited never breaks the app; it just shows `a rischio` until the next successful pass.
+
+| Source | Feeds | Endpoint |
+|---|---|---|
+| **ISTAT** (SDMX) | Demografia | `esploradati.istat.it/SDMXWS` (population, foreign %, age structure; km² curated) |
+| **DAIT** | Organigramma | `dait.interno.gov.it` roster CSV (deleghe stay curated) |
+| **IndicePA** (CKAN) | Ente provenance | `indicepa.gov.it/ipa-dati` (c_h163) |
+| **OpenPNRR** | PNRR | `openpnrr.it/api/v1` (466 projects, per-missione) |
+| **OpenCoesione** | Opere/coesione | `opencoesione.gov.it/it/api` (116 interventi + status) |
+| **BDAP** | Bilancio | `openbdap.rgs.mef.gov.it` SICILIA zip (spesa per missione, Titolo I/II) |
+
+**Still curated** (no per-comune open data): Eligendo (2023 comunali not published per-comune —
+kept as the verified static result), ANAC/Albo (scrape targets), ANPR + Comune servizi (auth-gated
+portals). Research notes per source live in `design/phase2-research/`. Future tiers: ISPRA, EEA,
+MIM, ICCU.
+
+> Ingestion runs as a script/cron job (never a request path); it may shell out to `curl` for
+> endpoints incompatible with Node's fetch (ISTAT). Recommended cadence: daily/weekly per source.
 
 ## Deploy (later)
 
