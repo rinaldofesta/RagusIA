@@ -4,6 +4,10 @@ import {
   getEntity,
   getSource,
   routeQuestion,
+  getAppalti,
+  getBilancio,
+  getDomainDetail,
+  getOrganigramma,
 } from "@/lib/data/repository";
 import type { QaBody } from "@/lib/model/types";
 import { answerWithSql } from "@/lib/query/engine";
@@ -20,14 +24,42 @@ import { ServiceCard } from "@/components/features/answers/ServiceCard";
 import { Evidence } from "@/components/features/answers/Evidence";
 import { SqlReveal } from "@/components/features/answers/SqlReveal";
 
-const QA_BODIES: Record<QaBody, () => React.ReactNode> = {
-  giunta: Giunta,
-  bilancio: Bilancio,
-  appalti: Appalti,
-  pnrr: Pnrr,
-  demografia: Demografia,
-  nomatch: Nomatch,
-};
+/** Render a curated answer body from live repository data (so the prose never drifts
+ *  from the dashboards and provenance dots reflect each source's real health). */
+async function renderBody(body: QaBody): Promise<React.ReactNode> {
+  switch (body) {
+    case "giunta": {
+      const [org, dait, eligendo] = await Promise.all([
+        getOrganigramma(),
+        getSource("dait"),
+        getSource("eligendo"),
+      ]);
+      return <Giunta org={org} daitSrc={dait} eligendoSrc={eligendo} />;
+    }
+    case "bilancio": {
+      const [data, src] = await Promise.all([getBilancio(), getSource("bdap")]);
+      return <Bilancio data={data} src={src} />;
+    }
+    case "appalti": {
+      const [data, src] = await Promise.all([getAppalti(), getSource("anac")]);
+      return <Appalti data={data} src={src} />;
+    }
+    case "pnrr": {
+      const [data, openpnrr, opencoesione] = await Promise.all([
+        getDomainDetail("pnrr"),
+        getSource("openpnrr"),
+        getSource("opencoesione"),
+      ]);
+      return data ? <Pnrr data={data} pnrrSrc={openpnrr} coesioneSrc={opencoesione} /> : <Nomatch />;
+    }
+    case "demografia": {
+      const [data, src] = await Promise.all([getDomainDetail("demografia"), getSource("istat")]);
+      return data ? <Demografia data={data} src={src} /> : <Nomatch />;
+    }
+    case "nomatch":
+      return <Nomatch />;
+  }
+}
 
 export default async function ChiediAnswerPage({
   searchParams,
@@ -100,14 +132,14 @@ async function renderQA(
   qa: NonNullable<Awaited<ReturnType<typeof getQA>>>,
   q?: string,
 ) {
-  const [entities, sources] = await Promise.all([
+  const [entities, sources, body] = await Promise.all([
     Promise.all(qa.entityIds.map(getEntity)),
     Promise.all(qa.sourceIds.map(getSource)),
+    renderBody(qa.body),
   ]);
   const ents = entities.filter((e): e is NonNullable<typeof e> => !!e);
   const srcs = sources.filter((s): s is NonNullable<typeof s> => !!s);
 
-  const Body = QA_BODIES[qa.body];
   const thinkingMeta =
     qa.body === "nomatch"
       ? "le fonti"
@@ -120,7 +152,7 @@ async function renderQA(
       evidence={<Evidence entities={ents} sources={srcs} />}
       sql={<SqlReveal sql={qa.sql} />}
     >
-      <Body />
+      {body}
     </AnswerView>
   );
 }
