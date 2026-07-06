@@ -1,13 +1,16 @@
-import { getAppalti, getSource } from "@/lib/data/repository";
+import { getAppalti, getSources } from "@/lib/data/repository";
 import { Breadcrumb, Icon, KpiCard, BarRow, SectionCard } from "@/components/primitives/kit";
 import { ProvButton } from "@/components/features/ProvButton";
+import { AtRiskBanner } from "@/components/features/AtRiskBanner";
+import { srcDot } from "@/components/features/answers/prov";
 
 export default async function AppaltiPage() {
-  const [{ kpis, operatori, uffici, contratti }, anac] = await Promise.all([
+  const [{ kpis, operatori, uffici, contratti }, sources] = await Promise.all([
     getAppalti(),
-    getSource("anac"),
+    getSources(),
   ]);
-  const anacAtRisk = anac?.status === "warn";
+  const srcById = new Map(sources.map((s) => [s.id, s]));
+  const anac = srcById.get("anac") ?? null;
 
   return (
     <div className="max-w-[1180px] mx-auto px-9 pt-6 pb-[70px]">
@@ -29,26 +32,7 @@ export default async function AppaltiPage() {
         </div>
       </div>
 
-      {anacAtRisk && (
-        <div className="flex items-center gap-[11px] bg-[rgba(194,151,42,0.07)] border border-[rgba(194,151,42,0.22)] rounded-[11px] px-[14px] py-[11px] mb-[18px]">
-          <Icon
-            name="ph-warning-circle"
-            weight="fill"
-            className="text-[18px] text-amber-d flex-none"
-          />
-          <div className="flex-1 font-hanken text-[12px] leading-[1.4] font-medium text-ink">
-            Ingestione a rischio · l&rsquo;ultimo aggiornamento della fonte ANAC non è andato a buon
-            fine. I valori mostrati sono dell&rsquo;ultimo snapshot valido{anac?.refresh ? ` · ${anac.refresh}` : ""}.
-          </div>
-          <ProvButton
-            sourceId="anac"
-            what="Stato ingestione ANAC"
-            className="font-hanken text-[11px] font-semibold text-amber-d bg-transparent border border-[rgba(194,151,42,0.4)] rounded-lg px-[11px] py-[6px] cursor-pointer flex-none hover:bg-[rgba(194,151,42,0.12)] transition-colors"
-          >
-            Vedi fonte
-          </ProvButton>
-        </div>
-      )}
+      <AtRiskBanner source={anac} />
 
       <div className="grid grid-cols-4 gap-[13px] mb-4">
         {kpis.map((k, i) => (
@@ -63,7 +47,7 @@ export default async function AppaltiPage() {
                     sourceId: k.sourceId,
                     what: k.srcVal,
                     tag: k.srcTag ?? "",
-                    dot: k.est ? "est" : k.status === "warn" ? "warn" : "ok",
+                    dot: srcDot(srcById.get(k.sourceId), k.est),
                   }
                 : undefined
             }

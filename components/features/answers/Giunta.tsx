@@ -46,7 +46,7 @@ export function Giunta({
           dot={srcDot(daitSrc)}
           tag={srcTag(daitSrc, "IODL")}
         />
-        . L'esecutivo si raccorda con il consiglio comunale
+        . L&apos;esecutivo si raccorda con il consiglio comunale
         <Cite
           sourceId="dait"
           what="Consiglio comunale"

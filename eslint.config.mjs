@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Non-shipped design mock/reference (uses deprecated ReactDOM.render etc.).
+    "design/reference/**",
   ]),
 ]);
 

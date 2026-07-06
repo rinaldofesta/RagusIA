@@ -71,7 +71,9 @@ export const indicepaAdapter: LiveAdapter<IndicePaData> = {
       }
 
       const ouCount = uoRes.result?.total ?? 0;
-      const pec = ente.Tipo_Mail1 === "Pec" ? ente.Mail1 : ente.Mail1 ?? null;
+      // Only report Mail1 as PEC when it is actually certified — otherwise null
+      // (a non-PEC address must not be attested as a certified one).
+      const pec = ente.Tipo_Mail1 === "Pec" ? ente.Mail1 : null;
 
       return {
         ok: true,

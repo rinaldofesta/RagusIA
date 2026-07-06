@@ -18,6 +18,7 @@ import { parse } from "csv-parse/sync";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
 import { curlBuffer, type FetchOutcome, type LiveAdapter } from "@/lib/data/ingest/framework";
+import { itNum, euro, euroMln, fmtMonth } from "@/lib/format";
 import type { AppaltiData, Bar, ContrattoRow, Kpi } from "@/lib/model/types";
 
 const CF_RAGUSA = "00180270886";
@@ -207,19 +208,4 @@ function observedLabel(): string {
 }
 function titleCase(s: string): string {
   return s ? s.charAt(0) + s.slice(1).toLowerCase() : s;
-}
-function itNum(n: number): string {
-  return Math.round(n).toLocaleString("it-IT");
-}
-function euro(n: number): string {
-  return `€${Math.round(n).toLocaleString("it-IT")}`;
-}
-function euroMln(n: number): string {
-  if (n >= 1_000_000) return `€${(n / 1_000_000).toFixed(1).replace(".", ",")}M`;
-  if (n >= 1_000) return `€${(n / 1_000).toFixed(0)}k`;
-  return `€${Math.round(n)}`;
-}
-function fmtMonth(iso: string): string {
-  const m = /^(\d{4})-(\d{2})/.exec(iso || "");
-  return m ? `${m[2]}/${m[1]}` : iso || "";
 }

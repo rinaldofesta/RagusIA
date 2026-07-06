@@ -1,8 +1,9 @@
 import {
   getQA,
   getService,
-  getEntity,
   getSource,
+  getEntitiesByIds,
+  getSourcesByIds,
   routeQuestion,
   getAppalti,
   getBilancio,
@@ -70,11 +71,13 @@ export default async function ChiediAnswerPage({
 
   // Resolve the target id: explicit `qa` wins, else route the free-text question.
   let id: string;
+  let analytic = false;
   if (qaParam) {
     id = qaParam;
   } else {
     const routed = await routeQuestion(q ?? "");
     id = routed.id;
+    analytic = routed.analytic;
   }
 
   // ---- Service answer (no evidence / sql) ----
@@ -82,7 +85,7 @@ export default async function ChiediAnswerPage({
     const svc = await getService(id);
     if (svc) {
       return (
-        <AnswerView question={svc.question} thinkingMeta="le fonti">
+        <AnswerView key={svc.question} question={svc.question} thinkingMeta="le fonti">
           <ServiceCard service={svc} />
         </AnswerView>
       );
@@ -90,15 +93,16 @@ export default async function ChiediAnswerPage({
     id = "nomatch";
   }
 
-  // ---- NL→SQL engine: try a live generated query before falling back to nomatch ----
-  if (id === "nomatch" && q && isQueryEnabled()) {
+  // ---- NL→SQL engine: for a no-match OR a specific/analytic question, try a
+  // live generated query first; if it can't answer, fall through to the curated
+  // topic answer (or nomatch) below. ----
+  if (q && isQueryEnabled() && (id === "nomatch" || analytic)) {
     const result = await answerWithSql(q);
     if (result && result.rows.length > 0) {
-      const srcs = (await Promise.all(result.sourceIds.map(getSource))).filter(
-        (s): s is NonNullable<typeof s> => !!s,
-      );
+      const srcs = await getSourcesByIds(result.sourceIds);
       return (
         <AnswerView
+          key={q}
           question={q}
           thinkingMeta="lo schema civico"
           evidence={<SqlSources sources={srcs} />}
@@ -117,7 +121,7 @@ export default async function ChiediAnswerPage({
     const nomatch = await getQA("nomatch");
     if (!nomatch) {
       return (
-        <AnswerView question={q ?? ""} thinkingMeta="le fonti">
+        <AnswerView key={q ?? ""} question={q ?? ""} thinkingMeta="le fonti">
           <Nomatch />
         </AnswerView>
       );
@@ -132,13 +136,11 @@ async function renderQA(
   qa: NonNullable<Awaited<ReturnType<typeof getQA>>>,
   q?: string,
 ) {
-  const [entities, sources, body] = await Promise.all([
-    Promise.all(qa.entityIds.map(getEntity)),
-    Promise.all(qa.sourceIds.map(getSource)),
+  const [ents, srcs, body] = await Promise.all([
+    getEntitiesByIds(qa.entityIds),
+    getSourcesByIds(qa.sourceIds),
     renderBody(qa.body),
   ]);
-  const ents = entities.filter((e): e is NonNullable<typeof e> => !!e);
-  const srcs = sources.filter((s): s is NonNullable<typeof s> => !!s);
 
   const thinkingMeta =
     qa.body === "nomatch"
@@ -147,6 +149,7 @@ async function renderQA(
 
   return (
     <AnswerView
+      key={qa.question || q || ""}
       question={qa.question || q || ""}
       thinkingMeta={thinkingMeta}
       evidence={<Evidence entities={ents} sources={srcs} />}

@@ -1,5 +1,6 @@
 import { EntityRef, Icon } from "@/components/primitives/kit";
-import { SourceChip } from "@/components/primitives/provenance";
+import { SourceChip, ProvDot } from "@/components/primitives/provenance";
+import { srcDot } from "./prov";
 import type { Entity, Source } from "@/lib/model/types";
 
 /** Shared "Da dove arriva" evidence block — entità citate + fonti usate
@@ -54,18 +55,14 @@ export function Evidence({
                 key={src.id}
                 className="flex items-center gap-[10px] bg-card-2 border border-line rounded-[10px] px-[11px] py-[9px]"
               >
-                <span
-                  className={`w-[7px] h-[7px] rounded-full flex-none ${
-                    src.status === "warn" ? "bg-amber" : "bg-teal"
-                  }`}
-                />
+                <ProvDot dot={srcDot(src)} size={7} />
                 <div className="min-w-0 flex-1">
                   <div className="font-hanken text-[12px] font-semibold text-ink">{src.short}</div>
                   <div className="font-mono text-[9.5px] font-medium text-ink-3 whitespace-nowrap overflow-hidden text-ellipsis">
                     {src.license} · {src.format}
                   </div>
                 </div>
-                <SourceChip sourceId={src.id} what={src.what} dot="ok" tag="apri" />
+                <SourceChip sourceId={src.id} what={src.what} dot={srcDot(src)} tag="apri" />
               </div>
             ))}
           </div>

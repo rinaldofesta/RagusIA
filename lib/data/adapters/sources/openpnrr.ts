@@ -14,6 +14,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
 import { fetchJson, type FetchOutcome, type LiveAdapter } from "@/lib/data/ingest/framework";
+import { itNum, mln } from "@/lib/format";
 
 const BASE = "https://openpnrr.it/api/v1";
 const ISTAT = "088009";
@@ -148,11 +149,3 @@ export const openpnrrAdapter: LiveAdapter<PnrrData> = {
     if (factRows.length) await db.insert(t.factPnrr).values(factRows).onConflictDoNothing();
   },
 };
-
-// ---- formatting helpers ----
-function itNum(n: number): string {
-  return Math.round(n).toLocaleString("it-IT");
-}
-function mln(euros: number): string {
-  return (euros / 1_000_000).toFixed(1).replace(".", ",");
-}

@@ -20,6 +20,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
 import { curlJson, type FetchOutcome, type LiveAdapter } from "@/lib/data/ingest/framework";
+import { itNum, itPct } from "@/lib/format";
 
 const BASE = "https://esploradati.istat.it/SDMXWS/rest/data";
 const REF_AREA = "088009"; // Ragusa
@@ -280,14 +281,3 @@ export const istatAdapter: LiveAdapter<IstatData> = {
   },
 };
 
-// ---- formatting helpers ----
-
-/** Italian thousands separator: 73878 -> "73.878". */
-function itNum(n: number): string {
-  return Math.round(n).toLocaleString("it-IT");
-}
-
-/** One-decimal Italian percentage: 9.64 -> "9,6%". */
-function itPct(p: number): string {
-  return `${p.toFixed(1).replace(".", ",")}%`;
-}

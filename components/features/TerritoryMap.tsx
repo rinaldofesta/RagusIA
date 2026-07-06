@@ -171,13 +171,11 @@ export function TerritoryMap({
   // Re-sync tiles when vista changes.
   useEffect(() => {
     syncTiles(vista);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vista]);
 
   // Re-sync layer groups when activeLayers changes.
   useEffect(() => {
     syncLayers(activeLayers);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLayers]);
 
   // invalidateSize shortly after mount + on resize.

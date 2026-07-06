@@ -1,6 +1,5 @@
 // Transcribed verbatim from design/reference/Ragusia.dc.html
-// docs: lines ~1440–1453 · docSections: lines ~1454–1463
-// alboCats: lines ~1464–1469 · docSuggested: line ~1470
+// docs: lines ~1440–1453 · docSections: lines ~1454–1463 · alboCats: lines ~1464–1469
 import type { DocItem, DocSection } from "@/lib/model/types";
 
 export const docs: DocItem[] = [
@@ -34,10 +33,4 @@ export const alboCats: DocSection[] = [
   { id: "albo-consiglio", label: "Delibere di consiglio", count: "188" },
   { id: "albo-determine", label: "Determine", count: "2.140" },
   { id: "albo-ordinanze", label: "Ordinanze", count: "162" },
-];
-
-export const docSuggested: string[] = [
-  "delibere di giunta sul bilancio 2024",
-  "determine Settore VI",
-  "ordinanze balneazione",
 ];

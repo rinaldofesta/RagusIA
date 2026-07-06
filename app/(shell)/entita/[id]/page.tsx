@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/repository";
 import { Icon, KpiCard, SectionCard, EntityRef } from "@/components/primitives/kit";
 import { SourceChip } from "@/components/primitives/provenance";
+import { srcDot } from "@/components/features/answers/prov";
 import { EntityBack } from "@/components/features/EntityBack";
 
 export default async function EntitaPage({
@@ -47,7 +48,7 @@ export default async function EntitaPage({
             key={s.id}
             sourceId={s.id}
             what={s.what}
-            dot={s.status === "warn" ? "warn" : "ok"}
+            dot={srcDot(s)}
             tag={s.short}
           />
         ))}

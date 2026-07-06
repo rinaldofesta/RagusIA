@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDominiCards } from "@/lib/data/repository";
 import { Icon } from "@/components/primitives/kit";
 import { SourceChip } from "@/components/primitives/provenance";
+import { srcDot } from "@/components/features/answers/prov";
 
 export default async function DominiPage() {
   const cards = await getDominiCards();
@@ -56,7 +57,7 @@ export default async function DominiPage() {
                 sourceId={c.sourceId}
                 what={c.srcVal}
                 tag={c.srcTag}
-                dot={c.status === "warn" ? "warn" : "ok"}
+                dot={srcDot(c)}
               />
             </div>
           </div>

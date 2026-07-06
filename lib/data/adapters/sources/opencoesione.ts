@@ -26,6 +26,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
 import { fetchJson, type FetchOutcome, type LiveAdapter } from "@/lib/data/ingest/framework";
+import { itNum, mln } from "@/lib/format";
 
 const TERRITORIO = "ragusa-comune";
 const CICLO = "2021_2027";
@@ -148,15 +149,3 @@ export const opencoesioneAdapter: LiveAdapter<CoesioneData> = {
     if (factRows.length) await db.insert(t.factCoesione).values(factRows).onConflictDoNothing();
   },
 };
-
-// ---- formatting helpers ----
-
-/** Italian thousands separator: 116 -> "116", 1234 -> "1.234". */
-function itNum(n: number): string {
-  return Math.round(n).toLocaleString("it-IT");
-}
-
-/** One-decimal Italian millions: 89102287 -> "89,1". */
-function mln(euros: number): string {
-  return (euros / 1_000_000).toFixed(1).replace(".", ",");
-}

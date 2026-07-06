@@ -8,10 +8,15 @@
 // This is a SCRIPT-ONLY concern (run via `pnpm ingest`), like the seed runner.
 // The app never imports it; surfaces read the resulting rows via the repository.
 
-import { eq, desc } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { eq, and, sql as dsql } from "drizzle-orm";
 import { parse } from "csv-parse/sync";
 import { db } from "@/lib/db/client";
 import { sources, ingestRuns } from "@/lib/db/schema";
+// Date helpers live in the shared formatter module; imported for internal use
+// and re-exported for the adapters that import them from the framework.
+import { fmtDate, fmtRefresh } from "@/lib/format";
+export { fmtDate, fmtRefresh };
 
 export interface FetchOutcome<T = unknown> {
   /** true when live data was retrieved and normalized successfully. */
@@ -36,15 +41,6 @@ export interface LiveAdapter<T = unknown> {
   fetch(): Promise<FetchOutcome<T>>;
   /** idempotently upsert the normalized payload into model tables. */
   apply(data: T): Promise<void>;
-}
-
-// ---- date helpers (real timestamps; this runs in a normal Node/tsx process) ----
-const pad = (n: number) => String(n).padStart(2, "0");
-export function fmtDate(d: Date): string {
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
-export function fmtRefresh(d: Date): string {
-  return `${fmtDate(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 // ---- fetch helpers ----
@@ -103,19 +99,6 @@ export async function curlJson<J = unknown>(url: string, opts?: Parameters<typeo
 const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
-/** JSON via curl with a browser UA (for WAF-protected APIs). */
-export async function curlJsonBrowser<J = unknown>(url: string, timeoutSec = 45): Promise<J> {
-  const { execFile } = await import("node:child_process");
-  const { promisify } = await import("node:util");
-  const run = promisify(execFile);
-  const { stdout } = await run(
-    "curl",
-    ["-sS", "-f", "--max-time", String(timeoutSec), "-H", "Accept: application/json", "-A", BROWSER_UA, url],
-    { maxBuffer: 256 * 1024 * 1024 },
-  );
-  return JSON.parse(stdout) as J;
-}
-
 /** Download a binary file (e.g. a zip) via curl with a browser UA → bytes. */
 export async function curlBuffer(url: string, timeoutSec = 180): Promise<Uint8Array> {
   const { execFile } = await import("node:child_process");
@@ -160,16 +143,30 @@ export interface IngestReport {
   note?: string;
 }
 
-/** The last-successful row count for a source, from ingest_runs (integer, avoids
- *  the Italian-formatted `sources.rows` string). */
+/** The last-SUCCESSFUL row count for a source, from ingest_runs (integer, avoids
+ *  the Italian-formatted `sources.rows` string). Filters to status='ok' so one
+ *  failed run doesn't erase the count-guard baseline, and orders by the parsed
+ *  timestamp (ran_at is 'dd/mm/yyyy hh:mm' text — a lexicographic sort is wrong
+ *  across month boundaries). */
+// Sortable timestamp from the 'dd/mm/yyyy hh:mm' text column, guarded so a
+// single malformed/legacy ran_at row can't make to_timestamp() raise and abort
+// the query (it sorts last instead).
+const RANAT_TS = dsql`case when ${ingestRuns.ranAt} ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4} [0-9]{2}:[0-9]{2}$' then to_timestamp(${ingestRuns.ranAt}, 'DD/MM/YYYY HH24:MI') else null end`;
+
 async function prevRowCount(sourceId: string): Promise<number | null> {
-  const [last] = await db
-    .select({ rows: ingestRuns.rows, status: ingestRuns.status })
-    .from(ingestRuns)
-    .where(eq(ingestRuns.sourceId, sourceId))
-    .orderBy(desc(ingestRuns.ranAt))
-    .limit(1);
-  return last && last.status === "ok" ? last.rows : null;
+  try {
+    const [last] = await db
+      .select({ rows: ingestRuns.rows })
+      .from(ingestRuns)
+      .where(and(eq(ingestRuns.sourceId, sourceId), eq(ingestRuns.status, "ok")))
+      .orderBy(dsql`${RANAT_TS} DESC NULLS LAST`)
+      .limit(1);
+    return last ? last.rows : null;
+  } catch (e) {
+    // Never let a baseline lookup abort the whole ingest run — degrade to "first".
+    console.warn(`  ⚠ prevRowCount(${sourceId}) failed, treating as first:`, (e as Error).message);
+    return null;
+  }
 }
 
 /** Count-guard: compare this run's rows to the previous successful count. */
@@ -180,7 +177,6 @@ export function guardVerdict(prev: number | null, now: number): GuardVerdict {
   return "ok";
 }
 
-let runSeq = 0;
 async function recordRun(
   sourceId: string,
   ranAt: string,
@@ -191,7 +187,7 @@ async function recordRun(
   note?: string,
 ): Promise<void> {
   await db.insert(ingestRuns).values({
-    id: `${sourceId}:${ranAt}:${runSeq++}`,
+    id: randomUUID(),
     sourceId,
     ranAt,
     status,
@@ -203,47 +199,88 @@ async function recordRun(
   });
 }
 
-/** Run the given adapters; returns a per-source report. Never throws for one bad source. */
-export async function runIngest(adapters: LiveAdapter[]): Promise<IngestReport[]> {
-  const reports: IngestReport[] = [];
-  for (const a of adapters) {
+/** Run the given adapters; returns a per-source report. Never throws for one bad
+ *  source. The count-guard runs BEFORE apply(): a 'drop'/'empty' verdict blocks
+ *  the write so a partial/shrunken fetch cannot overwrite last-good data (pass
+ *  `force` / INGEST_FORCE=1 to override when a real drop is expected). */
+export async function runIngest(
+  adapters: LiveAdapter[],
+  opts: { force?: boolean } = {},
+): Promise<IngestReport[]> {
+  const force = opts.force ?? process.env.INGEST_FORCE === "1";
+
+  // Sources are independent, so ingest them concurrently — wall time becomes the
+  // slowest single source, not the sum. Each keeps its own try/catch, provenance
+  // write and count-guard baseline (read from its own history), so concurrency is
+  // safe; only the interleaving of log lines changes. Order of reports is
+  // preserved (Promise.all keeps input order).
+  async function ingestOne(a: LiveAdapter): Promise<IngestReport> {
     const now = new Date();
     const ranAt = fmtRefresh(now);
     const prev = await prevRowCount(a.id);
     try {
       const out = await a.fetch();
       if (out.ok && out.data !== undefined) {
-        await a.apply(out.data);
         const guard = guardVerdict(prev, out.rows);
+        // `empty` (0 rows over a non-empty baseline) always blocks — force only
+        // overrides a suspicious-but-non-zero `drop`. A forced empty write would
+        // both wipe last-good data and reset the baseline to 0, silently
+        // disabling the guard for the next run.
+        const blocked = guard === "empty" || (guard === "drop" && !force);
+        if (blocked) {
+          // Count-guard BLOCKS the write: last-good data is preserved, source → warn.
+          const note = `count-guard ${guard}: ${prev} → ${out.rows} righe`;
+          await updateProvenance(a.id, { status: "warn", refresh: `${ranAt} · ${note}` });
+          await recordRun(a.id, ranAt, "warn", out.rows, prev, guard, note);
+          console.warn(
+            `  ⛔ COUNT-GUARD [${guard}] ${a.id}: ${prev} → ${out.rows} righe — scrittura BLOCCATA, dati precedenti conservati${guard === "drop" ? " (INGEST_FORCE=1 per forzare)" : ""}`,
+          );
+          return { id: a.id, status: "warn", rows: out.rows, guard, note };
+        }
+        await a.apply(out.data);
         await updateProvenance(a.id, {
           status: "ok",
           rows: String(out.rows),
           observed: out.observed,
           retrieved: fmtDate(now),
-          refresh: fmtRefresh(now),
+          refresh: ranAt,
         });
         await recordRun(a.id, ranAt, "ok", out.rows, prev, guard);
         console.log(`  ✓ ${a.id.padEnd(12)} ${a.feeds} · ${out.rows} righe · osservato ${out.observed}`);
-        if (guard === "drop" || guard === "empty") {
-          console.warn(
-            `  ⚠ COUNT-GUARD [${guard}] ${a.id}: ${prev} → ${out.rows} righe (Δ ${out.rows - (prev ?? 0)}) — verifica la fonte`,
-          );
-        }
-        reports.push({ id: a.id, status: "ok", rows: out.rows, guard });
-      } else {
-        const note = out.note ?? "ingestione fallita";
-        await updateProvenance(a.id, { status: "warn", refresh: `${fmtRefresh(now)} · ${note}` });
-        await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
-        console.log(`  ⚠ ${a.id.padEnd(12)} ${a.feeds} · a rischio (${note}) — dati precedenti conservati`);
-        reports.push({ id: a.id, status: "warn", rows: 0, guard: "empty", note });
+        return { id: a.id, status: "ok", rows: out.rows, guard };
       }
+      const note = out.note ?? "ingestione fallita";
+      await updateProvenance(a.id, { status: "warn", refresh: `${ranAt} · ${note}` });
+      await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
+      console.log(`  ⚠ ${a.id.padEnd(12)} ${a.feeds} · a rischio (${note}) — dati precedenti conservati`);
+      return { id: a.id, status: "warn", rows: 0, guard: "empty", note };
     } catch (e) {
       const note = (e as Error).message.slice(0, 80);
-      await updateProvenance(a.id, { status: "warn", refresh: `${fmtRefresh(now)} · errore` });
-      await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
+      // Best-effort recovery write — must not itself throw, or it would reject
+      // the whole concurrent run and discard every other source's report.
+      try {
+        await updateProvenance(a.id, { status: "warn", refresh: `${ranAt} · errore` });
+        await recordRun(a.id, ranAt, "warn", 0, prev, "empty", note);
+      } catch (e2) {
+        console.warn(`  ⚠ recovery write failed for ${a.id}:`, (e2 as Error).message);
+      }
       console.log(`  ✗ ${a.id.padEnd(12)} ${a.feeds} · errore: ${note} — dati precedenti conservati`);
-      reports.push({ id: a.id, status: "warn", rows: 0, guard: "empty", note });
+      return { id: a.id, status: "warn", rows: 0, guard: "empty", note };
     }
   }
+
+  // Bounded concurrency: sources run in parallel but at most INGEST_CONCURRENCY at
+  // once (default 4), so a few heavy CSV parses (ANAC national zips) can't stack
+  // to an OOM. ingestOne never rejects, so one bad source can't abort the run.
+  const limit = Math.max(1, Number(process.env.INGEST_CONCURRENCY) || 4);
+  const reports: IngestReport[] = new Array(adapters.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < adapters.length) {
+      const idx = next++;
+      reports[idx] = await ingestOne(adapters[idx]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, adapters.length) }, worker));
   return reports;
 }

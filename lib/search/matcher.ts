@@ -26,6 +26,21 @@ export function matchQA(q: string): string {
   return "nomatch";
 }
 
+/** Does the question ask for a SPECIFIC figure/ranking/filter (vs a generic,
+ *  definitional one)? Such questions should try the NL→SQL engine first — the
+ *  keyword matcher only owns the generic phrasing a curated answer was written
+ *  for. Analytic-but-unanswerable-by-SQL questions fall back to the curated QA. */
+export function isAnalytic(q: string): boolean {
+  const t = (q || "").toLowerCase();
+  if (
+    /\bquant[ei]\b|\bquanto\b|\bqual[ei]\b|\bpi[uù]\b|\bmeno\b|\bmedi[ao]\b|\btotale\b|\bsomma\b|\bnumero\b|\bconta\b|\belenc|\blista\b|\bclassific|\btop\b|\bmaggior|\bminor|\bsotto\b|\bsopra\b|\boltre\b|\balmeno\b|\bmassim|\bminim|\bpercentual/.test(t)
+  )
+    return true;
+  if (/\b(19|20)\d{2}\b/.test(t)) return true; // a specific year
+  if (/\d[\d.,]*\s*(€|euro|k\b|mln|milion|mila)/.test(t)) return true; // an amount threshold
+  return false;
+}
+
 const dStop = new Set([
   "di",
   "del",

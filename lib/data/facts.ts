@@ -22,6 +22,30 @@ function intLoose(s: string): number {
   return parseInt(s.replace(/\D/g, ""), 10) || 0;
 }
 
+// Seed rows must use the SAME value vocabulary the NL→SQL prompt promises the
+// model (schema-context.ts), otherwise a generated `WHERE stato = 'concluso'`
+// matches nothing on a seeded-but-not-ingested DB. These map the curated UI
+// chart labels onto the canonical enums the live adapters also emit.
+const STATO_CANON: Record<string, string> = {
+  Conclusi: "concluso",
+  "In corso": "in corso",
+  Programmati: "non avviato",
+};
+/** Classify a seed contract into the promised tipologia enum from its oggetto. */
+function tipoFromOggetto(oggetto: string): "Lavori" | "Servizi" | "Forniture" {
+  const s = oggetto.toLowerCase();
+  if (/servizi|raccolta|refezione|mensa|pulizia|manutenzione del verde|trasporto/.test(s)) return "Servizi";
+  if (/fornitur|acquist|arred|attrezzatur|hardware|licenz/.test(s)) return "Forniture";
+  return "Lavori";
+}
+/** Seed contract dates are 'mm/yyyy'; the schema-context promises the model
+ *  data as 'yyyy-mm-dd', so store an ISO date (day unknown → 01) for correct
+ *  range/order filters. */
+function toIsoDate(mmYyyy: string): string | null {
+  const m = /^(\d{2})\/(\d{4})$/.exec(mmYyyy.trim());
+  return m ? `${m[2]}-${m[1]}-01` : null;
+}
+
 export async function seedFacts(): Promise<void> {
   await db.delete(t.factContracts);
   await db.delete(t.factBudget);
@@ -49,24 +73,26 @@ export async function seedFacts(): Promise<void> {
   }));
   if (pnrr.length) await db.insert(t.factPnrr).values(pnrr).onConflictDoNothing();
 
-  // Opere/coesione → fact_coesione (curated seed chart bars)
+  // Opere/coesione → fact_coesione (curated seed chart bars, mapped to the
+  // canonical `stato` enum so NL→SQL equality filters match).
   const opereBars = seed.domainDetails.opere?.chart?.bars ?? [];
   const coesione = opereBars.map((b) => ({
-    stato: b.label,
+    stato: STATO_CANON[b.label] ?? b.label.toLowerCase(),
     progetti: intLoose(b.value),
     sourceId: "opencoesione",
   }));
   if (coesione.length) await db.insert(t.factCoesione).values(coesione).onConflictDoNothing();
 
-  // Appalti → fact_contracts (curated seed recent contracts; tipologia unknown in seed)
+  // Appalti → fact_contracts (curated seed recent contracts; tipologia inferred
+  // from the oggetto into the promised enum, not left as an unqueryable "—").
   const contracts = seed.appalti.contratti.map((c) => ({
     cig: c.cig,
     oggetto: c.ogg,
     importo: euroAmount(c.imp),
-    tipologia: "—",
+    tipologia: tipoFromOggetto(c.ogg),
     ufficio: c.uff,
     anno: /(\d{4})$/.exec(c.data)?.[1] ? Number(/(\d{4})$/.exec(c.data)![1]) : null,
-    data: c.data,
+    data: toIsoDate(c.data),
     sourceId: "anac",
   }));
   if (contracts.length) await db.insert(t.factContracts).values(contracts).onConflictDoNothing();

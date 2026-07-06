@@ -7,7 +7,9 @@ import { runIngest } from "./framework";
 import { liveAdapters, selectAdapters } from "./index";
 
 async function main() {
-  const ids = process.argv.slice(2);
+  const argv = process.argv.slice(2);
+  const force = argv.includes("--force");
+  const ids = argv.filter((a) => !a.startsWith("--"));
   const adapters = selectAdapters(ids);
   if (!liveAdapters.length) {
     console.log("· no live adapters registered yet.");
@@ -17,8 +19,8 @@ async function main() {
     console.log(`· no adapter matched [${ids.join(", ")}]. Registered: ${liveAdapters.map((a) => a.id).join(", ")}`);
     return;
   }
-  console.log(`· ingesting ${adapters.length} source(s): ${adapters.map((a) => a.id).join(", ")}`);
-  const reports = await runIngest(adapters);
+  console.log(`· ingesting ${adapters.length} source(s): ${adapters.map((a) => a.id).join(", ")}${force ? " (force: count-guard bypassed)" : ""}`);
+  const reports = await runIngest(adapters, { force });
   const ok = reports.filter((r) => r.status === "ok").length;
   console.log(`\n${ok === reports.length ? "✓" : "⚠"} ingest complete — ${ok}/${reports.length} ok`);
 }

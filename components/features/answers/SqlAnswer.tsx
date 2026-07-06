@@ -2,6 +2,7 @@ import type { Source } from "@/lib/model/types";
 import type { SqlAnswerResult } from "@/lib/query/engine";
 import { AnswerProse, Icon } from "@/components/primitives/kit";
 import { SourceChip } from "@/components/primitives/provenance";
+import { srcDot } from "./prov";
 
 function fmtCell(v: unknown): string {
   if (v === null || v === undefined) return "—";
@@ -79,7 +80,7 @@ export function SqlSources({ sources }: { sources: Source[] }) {
             sourceId={s.id}
             what={s.what}
             tag={`${s.short} · ${s.license}`}
-            dot={s.status === "warn" ? "warn" : "ok"}
+            dot={srcDot(s)}
           />
         ))}
       </div>

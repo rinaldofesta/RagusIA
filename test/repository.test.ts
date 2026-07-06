@@ -44,8 +44,8 @@ test("getGraph: center node centered, links non-empty", async () => {
 });
 
 test("routeQuestion: deterministic routing (no embeddings)", async () => {
-  expect(await repo.routeQuestion("Chi compone la giunta?")).toEqual({ kind: "qa", id: "giunta" });
-  expect(await repo.routeQuestion("Dove faccio la carta d'identità?")).toEqual({ kind: "service", id: "svc-cie" });
+  expect(await repo.routeQuestion("Chi compone la giunta?")).toEqual({ kind: "qa", id: "giunta", analytic: false });
+  expect(await repo.routeQuestion("Dove faccio la carta d'identità?")).toEqual({ kind: "service", id: "svc-cie", analytic: false });
   expect((await repo.routeQuestion("colore preferito del gatto?")).kind).toBe("nomatch");
 });
 

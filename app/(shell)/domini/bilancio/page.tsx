@@ -1,6 +1,9 @@
-import { getBilancio } from "@/lib/data/repository";
+import { getBilancio, getSources } from "@/lib/data/repository";
 import { Breadcrumb, Icon, KpiCard, BarRow, SectionCard } from "@/components/primitives/kit";
 import { SourceChip } from "@/components/primitives/provenance";
+import { AtRiskBanner } from "@/components/features/AtRiskBanner";
+import { srcDot } from "@/components/features/answers/prov";
+import { itDec1 } from "@/lib/format";
 
 const TW = 460;
 const TH = 86;
@@ -8,7 +11,12 @@ const TMIN = 98;
 const TMAX = 120;
 
 export default async function BilancioPage() {
-  const { kpis, missioni, trend, capitoli } = await getBilancio();
+  const [{ kpis, missioni, trend, capitoli }, sources] = await Promise.all([
+    getBilancio(),
+    getSources(),
+  ]);
+  const srcById = new Map(sources.map((s) => [s.id, s]));
+  const bdap = srcById.get("bdap") ?? null;
 
   const tx = (i: number) => 16 + (i * (TW - 32)) / (trend.length - 1);
   const ty = (v: number) => TH - 10 - ((v - TMIN) / (TMAX - TMIN)) * (TH - 26);
@@ -28,7 +36,7 @@ export default async function BilancioPage() {
   const capitaleM = mlnOf("capitale");
   const compTot = correnteM + capitaleM || 1;
   const correntePct = Math.round((correnteM / compTot) * 100);
-  const fmtM = (m: number) => `€${m.toFixed(1).replace(".", ",")}M`;
+  const fmtM = (m: number) => `€${itDec1(m)}M`;
 
   return (
     <div className="max-w-[1180px] mx-auto px-9 pt-6 pb-[70px]">
@@ -47,9 +55,11 @@ export default async function BilancioPage() {
           </p>
         </div>
         <div className="flex-none">
-          <SourceChip sourceId="bdap" what="Bilancio di previsione 2024" tag="BDAP · MEF/RGS" dot="ok" />
+          <SourceChip sourceId="bdap" what="Bilancio di previsione 2024" tag="BDAP · MEF/RGS" dot={srcDot(bdap)} />
         </div>
       </div>
+
+      <AtRiskBanner source={bdap} />
 
       <div className="grid grid-cols-4 gap-[13px] mb-4">
         {kpis.map((k, i) => (
@@ -64,7 +74,7 @@ export default async function BilancioPage() {
                     sourceId: k.sourceId,
                     what: k.srcVal,
                     tag: k.srcTag ?? "",
-                    dot: k.est ? "est" : k.status === "warn" ? "warn" : "ok",
+                    dot: srcDot(srcById.get(k.sourceId), k.est),
                   }
                 : undefined
             }
@@ -78,7 +88,7 @@ export default async function BilancioPage() {
             <div className="font-hanken text-[13px] font-semibold text-ink">
               Spesa per missione · 2024
             </div>
-            <SourceChip sourceId="bdap" what="Spesa per missione 2024" tag="BDAP" dot="ok" />
+            <SourceChip sourceId="bdap" what="Spesa per missione 2024" tag="BDAP" dot={srcDot(bdap)} />
           </div>
           {missioni.map((b, i) => (
             <BarRow
@@ -149,7 +159,7 @@ export default async function BilancioPage() {
           <div className="font-hanken text-[13px] font-semibold text-ink">
             Principali capitoli di spesa
           </div>
-          <SourceChip sourceId="bdap" what="Capitoli di spesa 2024" tag="BDAP" dot="ok" />
+          <SourceChip sourceId="bdap" what="Capitoli di spesa 2024" tag="BDAP" dot={srcDot(bdap)} />
         </div>
         <div className="grid grid-cols-[88px_1fr_56px_84px_1.1fr] gap-[10px] px-2 pb-[9px] border-b border-line font-mono text-[9.5px] font-semibold uppercase tracking-[0.06em] text-ink-3">
           <span>Capitolo</span>

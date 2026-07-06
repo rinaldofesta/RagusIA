@@ -7,37 +7,39 @@ import type { Source } from "@/lib/model/types";
 import { useProvenance } from "./provenance";
 import { Icon } from "./kit";
 
-export function ProvenanceDrawer() {
-  const params = useSearchParams();
-  const { close } = useProvenance();
-  const fonte = params.get("fonte");
-  const val = params.get("val") ?? "";
-  const [src, setSrc] = useState<Source | null>(null);
-
-  useEffect(() => {
-    if (!fonte) {
-      setSrc(null);
-      return;
-    }
-    let active = true;
-    fetch(`/api/source/${fonte}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((s) => active && setSrc(s))
-      .catch(() => active && setSrc(null));
-    return () => {
-      active = false;
-    };
-  }, [fonte]);
-
-  if (!fonte || !src) return null;
-  const ok = src.status === "ok";
-
-  const Row = ({ k, v }: { k: string; v: string }) => (
+function Row({ k, v }: { k: string; v: string }) {
+  return (
     <div className="flex justify-between gap-3 px-[13px] py-[11px] border-b border-line last:border-b-0">
       <span className="font-mono text-[11px] font-medium uppercase tracking-[0.06em] text-ink-3">{k}</span>
       <span className="font-mono text-[11.5px] font-semibold text-ink">{v}</span>
     </div>
   );
+}
+
+export function ProvenanceDrawer() {
+  const params = useSearchParams();
+  const { close } = useProvenance();
+  const fonte = params.get("fonte");
+  const val = params.get("val") ?? "";
+  // Keep the loaded source tied to the fonte it was fetched for, so switching
+  // fonte shows nothing until the new fetch resolves — no synchronous reset.
+  const [loaded, setLoaded] = useState<{ fonte: string; src: Source | null } | null>(null);
+
+  useEffect(() => {
+    if (!fonte) return;
+    let active = true;
+    fetch(`/api/source/${fonte}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((s) => active && setLoaded({ fonte, src: s }))
+      .catch(() => active && setLoaded({ fonte, src: null }));
+    return () => {
+      active = false;
+    };
+  }, [fonte]);
+
+  const src = loaded && loaded.fonte === fonte ? loaded.src : null;
+  if (!fonte || !src) return null;
+  const ok = src.status === "ok";
 
   return (
     <div className="fixed inset-0 z-[80]">

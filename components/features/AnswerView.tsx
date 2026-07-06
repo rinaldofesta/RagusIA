@@ -30,12 +30,15 @@ export function AnswerView({
   sql?: ReactNode;
 }) {
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("thinking");
+  // Tie the phase to the question it belongs to: when `question` changes the
+  // derived phase resets to "thinking" without a synchronous setState in the
+  // effect (which would cascade renders). The timeouts advance the new question.
+  const [state, setState] = useState<{ q: string; phase: Phase }>({ q: question, phase: "thinking" });
+  const phase: Phase = state.q === question ? state.phase : "thinking";
 
   useEffect(() => {
-    setPhase("thinking");
-    const toAnswer = setTimeout(() => setPhase("answer"), 760);
-    const toEvidence = setTimeout(() => setPhase("evidence"), 760 + 360);
+    const toAnswer = setTimeout(() => setState({ q: question, phase: "answer" }), 760);
+    const toEvidence = setTimeout(() => setState({ q: question, phase: "evidence" }), 760 + 360);
     return () => {
       clearTimeout(toAnswer);
       clearTimeout(toEvidence);

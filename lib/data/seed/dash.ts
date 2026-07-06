@@ -44,10 +44,10 @@ export const bilancio: BilancioData = {
 
 export const appalti: AppaltiData = {
   kpis: [
-    { label: "Contratti ≥ €40k", value: "284", sub: "pubblicati dal 2019", sourceId: "anac", srcVal: "Contratti ≥ €40k · 284", srcTag: "ANAC · a rischio", status: "warn" },
-    { label: "Valore complessivo", value: "€44,1 mln", sub: "importo aggiudicato", sourceId: "anac", srcVal: "Valore contratti · €44,1 mln", srcTag: "ANAC · a rischio", status: "warn" },
+    { label: "Contratti pubblicati", value: "284", sub: "CIG · dal 2019", sourceId: "anac", srcVal: "Contratti · 284", srcTag: "ANAC · a rischio", status: "warn" },
+    { label: "Valore complessivo", value: "€44,1 mln", sub: "importo a base di gara", sourceId: "anac", srcVal: "Valore contratti · €44,1 mln", srcTag: "ANAC · a rischio", status: "warn" },
     { label: "Importo medio", value: "€155k", sub: "per contratto", sourceId: "anac", srcVal: "Importo medio · €155k", srcTag: "ANAC · stima", est: true },
-    { label: "Operatori economici", value: "196", sub: "aggiudicatari distinti", sourceId: "anac", srcVal: "Operatori economici · 196", srcTag: "ANAC · a rischio", status: "warn" },
+    { label: "Uffici committenti", value: "5", sub: "centri di costo", sourceId: "anac", srcVal: "Uffici committenti · 5", srcTag: "ANAC · a rischio", status: "warn" },
   ],
   operatori: [
     { label: "Iblea Costruzioni S.r.l.", value: "€4,9M", sub: "28 contratti", pct: 100, color: "var(--amber)", entityId: "op-iblea" },

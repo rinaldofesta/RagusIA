@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDomainDetail } from "@/lib/data/repository";
 import { Breadcrumb, Icon, KpiCard, EntityRef, BarRow } from "@/components/primitives/kit";
@@ -88,19 +89,19 @@ export default async function DomainDetailPage({
       <div className="mt-6 px-4 py-[14px] bg-sand rounded-[11px] font-hanken text-[12px] leading-[1.5] text-ink-2">
         <Icon name="ph-sparkle" className="text-[13px] text-amber-d align-[-1px]" /> Vista
         d&apos;ossatura. Gli esemplari completi sono{" "}
-        <a
+        <Link
           href="/domini/bilancio"
           className="font-hanken font-semibold text-[12px] text-amber-d cursor-pointer underline underline-offset-2"
         >
           Bilancio
-        </a>{" "}
+        </Link>{" "}
         e{" "}
-        <a
+        <Link
           href="/domini/appalti"
           className="font-hanken font-semibold text-[12px] text-amber-d cursor-pointer underline underline-offset-2"
         >
           Appalti
-        </a>
+        </Link>
         .
       </div>
     </div>

@@ -8,8 +8,9 @@
 import type { Kpi, Source } from "@/lib/model/types";
 import type { ProvDotKind } from "@/components/primitives/provenance";
 
-/** Dot color: outlined amber for estimates, filled amber for an at-risk source, teal otherwise. */
-export function srcDot(src: Source | null | undefined, est = false): ProvDotKind {
+/** Dot color: outlined amber for estimates, filled amber for an at-risk source,
+ *  teal otherwise. Accepts anything carrying a `status` (Source, DomainCard, Kpi). */
+export function srcDot(src: { status?: Source["status"] } | null | undefined, est = false): ProvDotKind {
   if (est) return "est";
   return src?.status === "warn" ? "warn" : "ok";
 }

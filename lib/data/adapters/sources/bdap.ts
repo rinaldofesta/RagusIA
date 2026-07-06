@@ -16,10 +16,10 @@
 
 import { eq } from "drizzle-orm";
 import { unzipSync } from "fflate";
-import { parse } from "csv-parse/sync";
 import { db } from "@/lib/db/client";
 import * as t from "@/lib/db/schema";
-import type { FetchOutcome, LiveAdapter } from "@/lib/data/ingest/framework";
+import { parseCsv, type FetchOutcome, type LiveAdapter } from "@/lib/data/ingest/framework";
+import { mln, pctInt } from "@/lib/format";
 import type { Bar, Kpi } from "@/lib/model/types";
 
 const YEAR = 2024;
@@ -79,7 +79,7 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
         return { ok: false, rows: 0, observed: "", note: "BDAP: CSV missioni non trovato" };
       }
 
-      const missioniRows = parseRows(dec.decode(missioniCsv)).filter(
+      const missioniRows = parseCsv(dec.decode(missioniCsv), ";").filter(
         (r) => byHeader(r, "Denominazione Soggetto") === SOGGETTO,
       );
       if (!missioniRows.length) {
@@ -97,7 +97,7 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
       let corrente = 0;
       let capitale = 0;
       if (quadroCsv) {
-        const quadroRows = parseRows(dec.decode(quadroCsv)).filter(
+        const quadroRows = parseCsv(dec.decode(quadroCsv), ";").filter(
           (r) => byHeader(r, "Denominazione Soggetto") === SOGGETTO,
         );
         for (const r of quadroRows) {
@@ -143,8 +143,8 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
 
     const kpis: Kpi[] = [
       { label: "Totale previsione 2024", value: `€${mln(totale)} mln`, sub: "corrente + capitale (BDAP)", sourceId: "bdap", srcVal: "Bilancio di previsione 2024", srcTag: "BDAP · oss. 2024" },
-      { label: "Spesa corrente", value: `€${mln(corrente)} mln`, sub: `≈ ${pct(corrente, totale)}% del totale`, sourceId: "bdap", srcVal: "Spesa corrente 2024", srcTag: "BDAP · oss. 2024" },
-      { label: "Conto capitale", value: `€${mln(capitale)} mln`, sub: `investimenti · ≈ ${pct(capitale, totale)}%`, sourceId: "bdap", srcVal: "Conto capitale", srcTag: "BDAP · oss. 2024" },
+      { label: "Spesa corrente", value: `€${mln(corrente)} mln`, sub: `≈ ${pctInt(corrente, totale)}% del totale`, sourceId: "bdap", srcVal: "Spesa corrente 2024", srcTag: "BDAP · oss. 2024" },
+      { label: "Conto capitale", value: `€${mln(capitale)} mln`, sub: `investimenti · ≈ ${pctInt(capitale, totale)}%`, sourceId: "bdap", srcVal: "Conto capitale", srcTag: "BDAP · oss. 2024" },
       { label: "Missioni di spesa", value: String(missioni.length), sub: "articolazioni di bilancio", sourceId: "bdap", srcVal: "Missioni di bilancio 2024", srcTag: "BDAP · oss. 2024" },
     ];
 
@@ -168,18 +168,6 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
     if (factRows.length) await db.insert(t.factBudget).values(factRows).onConflictDoNothing();
   },
 };
-
-// ---- CSV helpers ----
-function parseRows(text: string): Record<string, string>[] {
-  return parse(text, {
-    columns: true,
-    delimiter: ";",
-    skip_empty_lines: true,
-    relax_column_count: true,
-    trim: true,
-    bom: true,
-  }) as Record<string, string>[];
-}
 
 function findEntry(files: Record<string, Uint8Array>, needle: string): Uint8Array | null {
   // Exclude the "- Voce di Riepilogo" pivot variant, which lacks the
@@ -224,10 +212,3 @@ function parseEuro(raw: string): number {
   return Number(s) || 0;
 }
 
-// ---- formatting ----
-function mln(euros: number): string {
-  return (euros / 1_000_000).toFixed(1).replace(".", ",");
-}
-function pct(part: number, whole: number): number {
-  return whole ? Math.round((part / whole) * 100) : 0;
-}

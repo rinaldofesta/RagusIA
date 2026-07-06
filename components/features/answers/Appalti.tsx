@@ -27,7 +27,7 @@ export function Appalti({ data, src }: { data: AppaltiData; src: Source | null }
         .
       </p>
       <p className="m-0 mb-[15px]">
-        L'importo medio è di circa <strong className="font-semibold">{medio}</strong> per contratto,
+        L&apos;importo medio è di circa <strong className="font-semibold">{medio}</strong> per contratto,
         distribuiti su <strong className="font-semibold">{uffici} uffici committenti</strong>
         <Cite
           sourceId="anac"
@@ -39,7 +39,7 @@ export function Appalti({ data, src }: { data: AppaltiData; src: Source | null }
       </p>
       <p className="m-0 mb-[14px] font-hanken text-[12.5px] leading-[1.5] font-normal text-ink-3">
         <Icon name="ph-info" className="text-[13px] align-[-1px]" /> Il dataset ANAC dei CIG non
-        include l'aggiudicatario: i nomi degli operatori economici non sono ricavabili da questa
+        include l&apos;aggiudicatario: i nomi degli operatori economici non sono ricavabili da questa
         fonte.
       </p>
       <Link

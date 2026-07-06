@@ -3,6 +3,7 @@
 // start` + `db reset`). Embeddings are computed only when EMBEDDINGS_PROVIDER is
 // set; otherwise that step is skipped and the app uses the deterministic fallback.
 
+import { eq, count } from "drizzle-orm";
 import { db, sql } from "./client";
 import * as t from "./schema";
 import * as seed from "@/lib/data/seed";
@@ -15,6 +16,19 @@ function withOrd<T>(rows: T[]): (T & { ord: number })[] {
 
 async function run() {
   console.log("· seeding RagusIA…");
+
+  // Guard: seeding wipes every table (including the fact/sources rows that a
+  // live `pnpm ingest` writes). A successful ingest records ok rows in
+  // ingest_runs — if any exist, refuse to seed so real data isn't clobbered.
+  const [{ n }] = await db.select({ n: count() }).from(t.ingestRuns).where(eq(t.ingestRuns.status, "ok"));
+  if (n > 0 && process.env.SEED_FORCE !== "1") {
+    console.error(
+      `✗ rifiuto di seedare: trovate ${n} run di ingest riuscite — il seed sovrascriverebbe i dati live.\n` +
+        "  Esegui con SEED_FORCE=1 per forzare il wipe/reseed (poi ri-esegui `pnpm ingest`).",
+    );
+    await sql.end();
+    process.exit(1);
+  }
 
   // Order does not matter (no FKs); wipe then insert for idempotency.
   await db.delete(t.embeddings);
