@@ -2,8 +2,8 @@ name: ci
 
 # Quality gate: lint, typecheck, build, and the full test suite on every push and
 # PR. DB-dependent tests (query engine, repository, seed) run against a real local
-# Supabase stack so the least-privilege `query_reader` role (migration 0002) is
-# present and the DB-boundary test actually exercises it.
+# Supabase stack. (The DB-boundary test self-skips here: under Supabase's `postgres`
+# role the query_reader backstop can't be assumed — see ADR-0001.)
 on:
   push:
     branches: ["**"]
