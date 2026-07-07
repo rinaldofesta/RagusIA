@@ -1,0 +1,46 @@
+name: ci
+
+# Quality gate: lint, typecheck, build, and the full test suite on every push and
+# PR. DB-dependent tests (query engine, repository, seed) run against a real local
+# Supabase stack so the least-privilege `query_reader` role (migration 0002) is
+# present and the DB-boundary test actually exercises it.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Local Supabase (started below). Also satisfies the boot-time env fail-fast
+      # so `next build` under NODE_ENV=production doesn't trip on a missing URL.
+      DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Fast, DB-free checks first — fail before booting Docker.
+      - run: pnpm lint
+      - run: pnpm typecheck
+
+      # Bring up Postgres + apply migrations (incl. 0002 query_reader), then seed.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: supabase start
+      - name: Seed
+        run: pnpm exec tsx lib/db/seed.ts
+
+      - run: pnpm build
+      - run: pnpm test

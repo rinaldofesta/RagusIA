@@ -25,6 +25,7 @@ export function AskBox() {
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        maxLength={500}
         placeholder="Es. Quanto vale il bilancio 2024 per missione?"
         className="flex-1 border-none outline-none bg-transparent font-hanken text-[16px] text-ink min-w-0 placeholder:text-ink-3"
       />

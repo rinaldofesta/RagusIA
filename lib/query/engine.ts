@@ -36,13 +36,15 @@ export function extractSql(raw: string): string {
 // Single source of truth for what the engine may touch. Fact tables carry the
 // source they attribute to; entities/sources are readable metadata (no source).
 // SCHEMA_CONTEXT (the prompt) describes these same tables — keep them in sync.
-const FACT_SOURCES: Record<string, string> = {
+// Exported so a test can assert they stay in sync with the Drizzle schema and the
+// SCHEMA_CONTEXT prompt (the 3-place invariant in ADR-0001).
+export const FACT_SOURCES: Record<string, string> = {
   fact_contracts: "anac",
   fact_budget: "bdap",
   fact_pnrr: "openpnrr",
   fact_coesione: "opencoesione",
 };
-const ALLOWED_TABLES = new Set([...Object.keys(FACT_SOURCES), "entities", "sources"]);
+export const ALLOWED_TABLES = new Set([...Object.keys(FACT_SOURCES), "entities", "sources"]);
 
 // Catalog functions / role-introspection tokens that never belong in a fact
 // query and would disclose the DB role, version, or filesystem.
@@ -223,10 +225,22 @@ function queryRoleAvailable(): Promise<boolean> {
   return roleAvailable;
 }
 
+// One-time loudness: if the query engine is live but the least-privilege role
+// isn't (migration 0002 didn't run), the DB boundary has silently degraded to the
+// app role + allowlist. Say so once, at error level. The /api/health endpoint
+// (roadmap M3) will surface the same flag.
+let warnedNoRole = false;
+
 /** Execute a validated SELECT inside a READ ONLY transaction (timeout + rollback),
  *  dropped into the least-privilege reader role when available. */
 export async function execReadOnly(query: string): Promise<Record<string, unknown>[]> {
   const useRole = await queryRoleAvailable();
+  if (!useRole && isQueryEnabled() && !warnedNoRole) {
+    warnedNoRole = true;
+    console.error(
+      "[query] query_reader role unavailable — generated SQL runs as the app role; apply migration 0002 to restore the least-privilege boundary.",
+    );
+  }
   return sql.begin(async (tx) => {
     await tx.unsafe("set transaction read only");
     await tx.unsafe("set local statement_timeout = 4000");
