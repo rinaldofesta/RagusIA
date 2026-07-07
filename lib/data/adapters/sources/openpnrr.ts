@@ -45,9 +45,18 @@ interface Territorio {
   id: number;
   istat_id: string;
 }
-interface Progetto {
+export interface Progetto {
   finanziamento_totale: string | null;
   territori: string[];
+}
+
+/** Sum financing over SINGLE-comune projects only. Multi-territorio projects
+ *  (~11%) carry national totals that inflate the euro figure ~12×, so they're
+ *  counted elsewhere but excluded from the € KPI. Pure — testable with fixtures. */
+export function sumSingleComuneFinancing(results: Progetto[]): number {
+  return results
+    .filter((p) => Array.isArray(p.territori) && p.territori.length === 1)
+    .reduce((sum, p) => sum + (Number(p.finanziamento_totale) || 0), 0);
 }
 
 async function countFor(territorioId: number, missione?: string): Promise<number> {
@@ -88,9 +97,7 @@ export const openpnrrAdapter: LiveAdapter<PnrrData> = {
         `${BASE}/progetti?territori=${territorioId}&page_size=1000`,
         { headers: { accept: "application/json" } },
       );
-      const valoreEuroSingle = (dump.results ?? [])
-        .filter((p) => Array.isArray(p.territori) && p.territori.length === 1)
-        .reduce((sum, p) => sum + (Number(p.finanziamento_totale) || 0), 0);
+      const valoreEuroSingle = sumSingleComuneFinancing(dump.results ?? []);
 
       return {
         ok: true,

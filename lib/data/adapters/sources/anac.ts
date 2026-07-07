@@ -28,7 +28,7 @@ const YEARS = (process.env.ANAC_YEARS ?? "2024,2025").split(",").map((s) => s.tr
 const ZIP = (year: string, mm: string) =>
   `https://dati.anticorruzione.it/opendata/download/dataset/cig-${year}/filesystem/cig_csv_${year}_${mm}.zip`;
 
-interface AnacContract {
+export interface AnacContract {
   cig: string;
   oggetto: string;
   importo: number;
@@ -48,12 +48,11 @@ function col(row: Record<string, string>, name: string): string {
   return (row[name] ?? "").trim();
 }
 
-async function fetchMonth(year: string, mm: string): Promise<AnacContract[]> {
-  const bytes = await curlBuffer(ZIP(year, mm), 180);
-  const files = unzipSync(bytes);
-  const csvKey = Object.keys(files).find((k) => k.toLowerCase().endsWith(".csv"));
-  if (!csvKey) return [];
-  const rows = parse(strFromU8(files[csvKey]), {
+/** Parse an ANAC monthly `cig_csv` (`;`-delimited) into the contracts for one
+ *  amministrazione, keyed on `cf_amministrazione_appaltante`. Pure — no I/O — so
+ *  the download/unzip stays in fetch() and this can be unit-tested with a fixture. */
+export function parseAnacContracts(csvText: string, cf: string): AnacContract[] {
+  const rows = parse(csvText, {
     columns: true,
     delimiter: ";",
     skip_empty_lines: true,
@@ -65,7 +64,7 @@ async function fetchMonth(year: string, mm: string): Promise<AnacContract[]> {
 
   const out: AnacContract[] = [];
   for (const r of rows) {
-    if (col(r, "cf_amministrazione_appaltante") !== CF_RAGUSA) continue;
+    if (col(r, "cf_amministrazione_appaltante") !== cf) continue;
     const importo = Number(col(r, "importo_lotto") || col(r, "importo_complessivo_gara")) || 0;
     out.push({
       cig: col(r, "cig"),
@@ -77,6 +76,14 @@ async function fetchMonth(year: string, mm: string): Promise<AnacContract[]> {
     });
   }
   return out;
+}
+
+async function fetchMonth(year: string, mm: string): Promise<AnacContract[]> {
+  const bytes = await curlBuffer(ZIP(year, mm), 180);
+  const files = unzipSync(bytes);
+  const csvKey = Object.keys(files).find((k) => k.toLowerCase().endsWith(".csv"));
+  if (!csvKey) return [];
+  return parseAnacContracts(strFromU8(files[csvKey]), CF_RAGUSA);
 }
 
 export const anacAdapter: LiveAdapter<AnacData> = {
@@ -206,6 +213,6 @@ function toBars(m: Map<string, number>, colors: string[]): Bar[] {
 function observedLabel(): string {
   return YEARS.length > 1 ? `${YEARS[0]}–${YEARS[YEARS.length - 1]}` : YEARS[0];
 }
-function titleCase(s: string): string {
+export function titleCase(s: string): string {
   return s ? s.charAt(0) + s.slice(1).toLowerCase() : s;
 }

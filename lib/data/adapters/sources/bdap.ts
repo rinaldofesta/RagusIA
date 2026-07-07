@@ -79,33 +79,15 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
         return { ok: false, rows: 0, observed: "", note: "BDAP: CSV missioni non trovato" };
       }
 
-      const missioniRows = parseCsv(dec.decode(missioniCsv), ";").filter(
-        (r) => byHeader(r, "Denominazione Soggetto") === SOGGETTO,
-      );
-      if (!missioniRows.length) {
+      const missioni = parseBdapMissioni(dec.decode(missioniCsv));
+      if (!missioni.length) {
         return { ok: false, rows: 0, observed: "", note: "BDAP: Comune di Ragusa non presente" };
       }
 
-      const missioni = missioniRows
-        .map((r) => ({
-          code: pad2(byHeader(r, "Codice Missione")),
-          amount: parseEuro(amountCell(r)),
-        }))
-        .filter((m) => m.code && m.amount > 0);
-
       // Titolo I / II split from the Quadro Generale (fallback: 79/21 of mission sum)
-      let corrente = 0;
-      let capitale = 0;
-      if (quadroCsv) {
-        const quadroRows = parseCsv(dec.decode(quadroCsv), ";").filter(
-          (r) => byHeader(r, "Denominazione Soggetto") === SOGGETTO,
-        );
-        for (const r of quadroRows) {
-          const titolo = pad2(byHeader(r, "Codice Titolo"));
-          if (titolo === "01") corrente = parseEuro(amountCell(r));
-          else if (titolo === "02") capitale = parseEuro(amountCell(r));
-        }
-      }
+      let { corrente, capitale } = quadroCsv
+        ? parseBdapTitoli(dec.decode(quadroCsv))
+        : { corrente: 0, capitale: 0 };
       if (!corrente && !capitale) {
         const missSum = missioni.reduce((s, m) => s + m.amount, 0);
         corrente = Math.round(missSum * 0.79);
@@ -169,6 +151,34 @@ export const bdapAdapter: LiveAdapter<BilancioLive> = {
   },
 };
 
+/** Rows for `soggetto` mapped to {ARCONET mission code, competenza amount}.
+ *  Pure (text in, records out) so the zip/decode stays in fetch() and this is
+ *  unit-testable with a `;`-CSV fixture. */
+export function parseBdapMissioni(
+  csvText: string,
+  soggetto = SOGGETTO,
+): { code: string; amount: number }[] {
+  return parseCsv(csvText, ";")
+    .filter((r) => byHeader(r, "Denominazione Soggetto") === soggetto)
+    .map((r) => ({ code: pad2(byHeader(r, "Codice Missione")), amount: parseEuro(amountCell(r)) }))
+    .filter((m) => m.code && m.amount > 0);
+}
+
+/** Titolo I (corrente) / II (capitale) competenza from the Quadro Generale CSV. */
+export function parseBdapTitoli(
+  csvText: string,
+  soggetto = SOGGETTO,
+): { corrente: number; capitale: number } {
+  let corrente = 0;
+  let capitale = 0;
+  for (const r of parseCsv(csvText, ";").filter((r) => byHeader(r, "Denominazione Soggetto") === soggetto)) {
+    const titolo = pad2(byHeader(r, "Codice Titolo"));
+    if (titolo === "01") corrente = parseEuro(amountCell(r));
+    else if (titolo === "02") capitale = parseEuro(amountCell(r));
+  }
+  return { corrente, capitale };
+}
+
 function findEntry(files: Record<string, Uint8Array>, needle: string): Uint8Array | null {
   // Exclude the "- Voce di Riepilogo" pivot variant, which lacks the
   // Arconet mission/titolo code columns we map on.
@@ -179,14 +189,14 @@ function findEntry(files: Record<string, Uint8Array>, needle: string): Uint8Arra
 }
 
 /** Look up a row value by a header substring (headers vary slightly between files). */
-function byHeader(row: Record<string, string>, needle: string): string {
+export function byHeader(row: Record<string, string>, needle: string): string {
   const key = Object.keys(row).find((k) => k.toLowerCase().includes(needle.toLowerCase()));
   return key ? (row[key] ?? "").trim() : "";
 }
 
 /** The year-1 competenza previsione column ("Previsioni in CC 1 Anno" /
  *  "Pre.  in CC 1Anno"), excluding the "di cui"/FPV/Impegnato/Cassa sub-columns. */
-function amountCell(row: Record<string, string>): string {
+export function amountCell(row: Record<string, string>): string {
   const keys = Object.keys(row);
   const isCompetenza1 = (k: string) =>
     /cc\s*1\s*anno/i.test(k) &&
@@ -195,13 +205,13 @@ function amountCell(row: Record<string, string>): string {
   return key ? row[key] ?? "" : "";
 }
 
-function pad2(code: string): string {
+export function pad2(code: string): string {
   const digits = code.replace(/\D/g, "");
   return digits ? digits.padStart(2, "0").slice(-2) : "";
 }
 
 /** Parse a euro amount robustly whether the source uses Italian (1.234,56) or US (1,234.56) format. */
-function parseEuro(raw: string): number {
+export function parseEuro(raw: string): number {
   if (!raw) return 0;
   let s = raw.replace(/[^\d.,-]/g, "").trim();
   if (!s) return 0;
