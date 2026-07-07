@@ -32,6 +32,7 @@ recorded-fixture tests.*
 | 2.2 | **Rate limiting** on the expensive path — Postgres fixed-window limiter (`rate_limits` table, key = IP + minute) gating `answerWithSql()`; looser threshold on `/api/source`. No new infra; works local and hosted | One LLM call per unauthenticated request today | M |
 | 2.3 | **Adapter tests with recorded fixtures** — `test/adapters/` + truncated real payloads in `test/fixtures/<source>/`; extract pure `parse*()` functions where fetch/parse are entangled. Priority: `anac` (zip + national CSV CF filter), `bdap` (ISO-8859-1 zip CSV), `istat` (SDMX), then the rest | The most failure-prone code in the repo (remote gov CSV/zip/SDMX parsing) has zero coverage | M |
 | 2.4 | **Staleness alerting** — fail the ingest Action when a source's last `ok` run in `ingest_runs` is older than 7 days | A source can rot at `warn` indefinitely with only a UI dot to show for it | S |
+| 2.5 | **Activate the `query_reader` DB backstop** — add a dedicated LOGIN role (e.g. `ragusia_app`) granted `query_reader WITH SET TRUE`, and connect the app as it via `DATABASE_URL` (instead of Supabase's reserved `postgres`, which can't be granted SET — see ADR-0001). Then `execReadOnly`'s `SET LOCAL ROLE` actually engages and the DB-boundary test runs instead of skipping | Today the DB-level least-privilege boundary is inert under `postgres`; the allowlist + read-only tx are the only NL→SQL guard | M |
 
 ## M3 — "Ship it" (deploy + performance)
 
@@ -40,7 +41,7 @@ cache; guard rails hold against the hosted DB.*
 
 | # | Item | Why | Size |
 |---|---|---|---|
-| 3.1 | **Hosted Supabase** — provision, `supabase link`, push migrations 0000–0003, seed, verify the `query_reader` probe passes, disable public Data API exposure, repoint the Action's `DATABASE_URL` secret. Pool tuning in `lib/db/client.ts` (`max` ≈ 5, `idle_timeout`) for serverless | Deploy prerequisite | M |
+| 3.1 | **Hosted Supabase** — provision, `supabase link`, push migrations 0000–0003, seed, disable public Data API exposure, repoint the Action's `DATABASE_URL` secret. Pool tuning in `lib/db/client.ts` (`max` ≈ 5, `idle_timeout`) for serverless. (Connect as the dedicated app role from M2.5 so the `query_reader` backstop is live, not the reserved `postgres`.) | Deploy prerequisite | M |
 | 3.2 | **Vercel deploy** — env via `vercel env` (`DATABASE_URL`, `QUERY_PROVIDER=gateway`, `QUERY_MODEL`, `EMBEDDINGS_PROVIDER`); AI Gateway auth is OIDC on Vercel (no key); the M1 CI is the gate | The point of it all | S |
 | 3.3 | **Caching** — ISR (`export const revalidate = 3600`) on the read-only surfaces (`domini/*`, `fonti`, `esplora`, `mappa`, `documenti`, `entita/[id]`); `/chiedi` stays dynamic. Later refinement: `use cache` + on-demand revalidation pinged by the ingest Action after a successful run | Everything is `force-dynamic` today — a DB round-trip per page view for data that changes at most daily | S |
 | 3.4 | **Health endpoint** — `/api/health`: `{ db, sourcesOk, queryRoleApplied, lastIngestAt }`; pluggable into any uptime monitor; surfaces the 1.6 role check | No way to monitor the deployment from outside | S |
