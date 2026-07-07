@@ -40,7 +40,11 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.105.0
-      - run: supabase start --debug
+      # Start only what the DB tests need. The full stack's heavy/flaky services
+      # (analytics logflare+vector, realtime, edge-runtime, studio, imgproxy) fail
+      # health checks on CI runners and hang `supabase start` — exclude them.
+      # gotrue stays in so the `auth` schema exists for the DB-boundary test.
+      - run: supabase start -x studio,imgproxy,realtime,edge-runtime,logflare,vector,postgres-meta,supavisor
       - name: Seed
         run: pnpm exec tsx lib/db/seed.ts
 
