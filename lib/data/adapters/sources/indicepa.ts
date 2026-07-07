@@ -22,7 +22,7 @@ const IPA_CODE = "c_h163";
 const RESOURCE_ENTI = "d09adf99-dc10-4349-8c53-27b1e5aa97b6";
 const RESOURCE_UNITA_ORGANIZZATIVE = "b0aa1f6c-f135-4c8a-b416-396fed4e1a5d";
 
-interface CkanDatastoreResponse<R> {
+export interface CkanDatastoreResponse<R> {
   success: boolean;
   result: {
     total: number;
@@ -30,7 +30,7 @@ interface CkanDatastoreResponse<R> {
   };
 }
 
-interface EnteRecord {
+export interface EnteRecord {
   Codice_IPA: string;
   Denominazione_ente: string;
   Mail1: string | null;
@@ -41,6 +41,22 @@ export interface IndicePaData {
   denominazione: string;
   pec: string | null;
   ouCount: number;
+}
+
+/** Parse the two CKAN datastore responses into the ente provenance record.
+ *  Pure — returns null when the ente record is missing (fetch() → warn). Only
+ *  attests Mail1 as PEC when it is actually certified (`Tipo_Mail1 === "Pec"`). */
+export function parseIndicePa(
+  enteRes: CkanDatastoreResponse<EnteRecord>,
+  uoRes: CkanDatastoreResponse<unknown>,
+): IndicePaData | null {
+  const ente = enteRes.result?.records?.[0];
+  if (!enteRes.success || !ente) return null;
+  return {
+    denominazione: ente.Denominazione_ente,
+    pec: ente.Tipo_Mail1 === "Pec" ? ente.Mail1 : null,
+    ouCount: uoRes.result?.total ?? 0,
+  };
 }
 
 function datastoreUrl(resourceId: string, opts: { limit?: number } = {}): string {
@@ -65,25 +81,16 @@ export const indicepaAdapter: LiveAdapter<IndicePaData> = {
         fetchJson<CkanDatastoreResponse<unknown>>(datastoreUrl(RESOURCE_UNITA_ORGANIZZATIVE, { limit: 0 })),
       ]);
 
-      const ente = enteRes.result?.records?.[0];
-      if (!enteRes.success || !ente) {
+      const data = parseIndicePa(enteRes, uoRes);
+      if (!data) {
         return { ok: false, rows: 0, observed: "", note: "IndicePA non raggiungibile" };
       }
 
-      const ouCount = uoRes.result?.total ?? 0;
-      // Only report Mail1 as PEC when it is actually certified — otherwise null
-      // (a non-PEC address must not be attested as a certified one).
-      const pec = ente.Tipo_Mail1 === "Pec" ? ente.Mail1 : null;
-
       return {
         ok: true,
-        rows: ouCount,
+        rows: data.ouCount,
         observed: fmtDate(new Date()),
-        data: {
-          denominazione: ente.Denominazione_ente,
-          pec,
-          ouCount,
-        },
+        data,
       };
     } catch {
       return { ok: false, rows: 0, observed: "", note: "IndicePA non raggiungibile" };

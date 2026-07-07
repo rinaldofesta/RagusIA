@@ -88,6 +88,37 @@ interface DaitRow {
   incarico: string;
 }
 
+/** Parse the DAIT per-province roster CSV (2-line preamble + `;`-header) into the
+ *  Ragusa giunta roster. Pure — returns null when the Sindaco row is absent
+ *  (which fetch() maps to a `warn`). `rows` is the count of Ragusa admin rows. */
+export function parseDaitRoster(csvText: string): { roster: DaitRoster; rows: number } | null {
+  const withoutPreamble = csvText.split("\n").slice(2).join("\n");
+  const rows = parseCsv(withoutPreamble, ";") as unknown as DaitRow[];
+  const ragusa = rows.filter(
+    (r) => r.denominazione_comune === "RAGUSA" && r.sigla_provincia === "RG",
+  );
+  const sindacoRow = ragusa.find((r) => r.descrizione_carica === "Sindaco");
+  if (!sindacoRow) return null;
+
+  const assessoriRows = ragusa.filter((r) => r.descrizione_carica === "Assessore");
+  const presidenteRow = ragusa.find((r) => (r.incarico ?? "").includes("Presidente del consiglio"));
+  const nConsiglieri = ragusa.filter((r) => r.descrizione_carica.includes("Consigliere")).length;
+
+  return {
+    roster: {
+      sindacoNome: prettyName(`${sindacoRow.nome} ${sindacoRow.cognome}`),
+      assessori: assessoriRows.map((r) => ({
+        nome: prettyName(`${r.nome} ${r.cognome}`),
+        ruolo: "Assessore",
+        vice: (r.incarico ?? "").includes("Vicesindaco"),
+      })),
+      presidente: presidenteRow ? prettyName(`${presidenteRow.nome} ${presidenteRow.cognome}`) : "",
+      nConsiglieri,
+    },
+    rows: ragusa.length,
+  };
+}
+
 export const daitAdapter: LiveAdapter<DaitRoster> = {
   id: "dait",
   label: "DAIT — Ministero dell'Interno",
@@ -101,35 +132,12 @@ export const daitAdapter: LiveAdapter<DaitRoster> = {
       return { ok: false, rows: 0, observed: "", note: "DAIT non raggiungibile" };
     }
 
-    // Skip the 2-line title/metadata preamble before the real CSV header.
-    const withoutPreamble = text.split("\n").slice(2).join("\n");
-    const rows = parseCsv(withoutPreamble, ";") as unknown as DaitRow[];
-
-    const ragusa = rows.filter(
-      (r) => r.denominazione_comune === "RAGUSA" && r.sigla_provincia === "RG",
-    );
-
-    const sindacoRow = ragusa.find((r) => r.descrizione_carica === "Sindaco");
-    const assessoriRows = ragusa.filter((r) => r.descrizione_carica === "Assessore");
-    const presidenteRow = ragusa.find((r) => (r.incarico ?? "").includes("Presidente del consiglio"));
-    const nConsiglieri = ragusa.filter((r) => r.descrizione_carica.includes("Consigliere")).length;
-
-    if (!sindacoRow) {
+    const parsed = parseDaitRoster(text);
+    if (!parsed) {
       return { ok: false, rows: 0, observed: "", note: "DAIT: riga Sindaco non trovata" };
     }
 
-    const data: DaitRoster = {
-      sindacoNome: prettyName(`${sindacoRow.nome} ${sindacoRow.cognome}`),
-      assessori: assessoriRows.map((r) => ({
-        nome: prettyName(`${r.nome} ${r.cognome}`),
-        ruolo: "Assessore",
-        vice: (r.incarico ?? "").includes("Vicesindaco"),
-      })),
-      presidente: presidenteRow ? prettyName(`${presidenteRow.nome} ${presidenteRow.cognome}`) : "",
-      nConsiglieri,
-    };
-
-    return { ok: true, rows: ragusa.length, observed: "2023–2028", data };
+    return { ok: true, rows: parsed.rows, observed: "2023–2028", data: parsed.roster };
   },
 
   async apply(data: DaitRoster): Promise<void> {

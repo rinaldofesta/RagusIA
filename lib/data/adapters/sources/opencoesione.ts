@@ -46,7 +46,7 @@ export interface CoesioneData {
 }
 
 // ---- OpenCoesione `aggregati/territori` JSON shape (fields we need) ----
-interface AggregatiResponse {
+export interface AggregatiResponse {
   aggregati: {
     totali: {
       progetti: string;
@@ -61,9 +61,30 @@ interface AggregatiResponse {
   };
 }
 
-function toInt(s: string | undefined): number {
+export function toInt(s: string | undefined): number {
   if (!s) return 0;
   return Math.round(Number(s.replace(",", ".")));
+}
+
+/** Parse the pre-aggregated `aggregati/territori` payload into normalized
+ *  cohesion figures. Pure — returns null when the shape is missing or empty
+ *  (rate-limited/unreachable), which fetch() maps to a `warn`. */
+export function parseCoesione(msg: AggregatiResponse): CoesioneData | null {
+  const totali = msg?.aggregati?.totali;
+  const stati = msg?.aggregati?.stati_progetti;
+  if (!totali || !stati) return null;
+  const interventi = toInt(totali.progetti);
+  if (!interventi) return null;
+  return {
+    interventi,
+    valoreEuro: toInt(totali.costo_pubblico),
+    status: {
+      non_avviato: toInt(stati.non_avviato?.totali.progetti),
+      in_corso: toInt(stati.in_corso?.totali.progetti),
+      liquidato: toInt(stati.liquidato?.totali.progetti),
+      concluso: toInt(stati.concluso?.totali.progetti),
+    },
+  };
 }
 
 export const opencoesioneAdapter: LiveAdapter<CoesioneData> = {
@@ -77,30 +98,16 @@ export const opencoesioneAdapter: LiveAdapter<CoesioneData> = {
         headers: { accept: "application/json" },
       });
 
-      const totali = msg?.aggregati?.totali;
-      const stati = msg?.aggregati?.stati_progetti;
-      if (!totali || !stati) {
-        return { ok: false, rows: 0, observed: "", note: "OpenCoesione rate limit / non raggiungibile" };
-      }
-
-      const interventi = toInt(totali.progetti);
-      const valoreEuro = toInt(totali.costo_pubblico);
-      const status: CoesioneStatus = {
-        non_avviato: toInt(stati.non_avviato?.totali.progetti),
-        in_corso: toInt(stati.in_corso?.totali.progetti),
-        liquidato: toInt(stati.liquidato?.totali.progetti),
-        concluso: toInt(stati.concluso?.totali.progetti),
-      };
-
-      if (!interventi) {
+      const data = parseCoesione(msg);
+      if (!data) {
         return { ok: false, rows: 0, observed: "", note: "OpenCoesione rate limit / non raggiungibile" };
       }
 
       return {
         ok: true,
-        rows: interventi,
+        rows: data.interventi,
         observed: "2021–2027",
-        data: { interventi, valoreEuro, status },
+        data,
       };
     } catch {
       return { ok: false, rows: 0, observed: "", note: "OpenCoesione rate limit / non raggiungibile" };

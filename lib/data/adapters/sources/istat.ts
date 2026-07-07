@@ -58,14 +58,14 @@ interface SdmxDataSet {
 // ISTAT's `Accept: application/json` returns SDMX-JSON 1.0 with `structure` and
 // `dataSets` at the ROOT. (SDMX-JSON 2.0 nests them under `data`/`structures`.)
 // Support both shapes defensively.
-interface SdmxJsonMessage {
+export interface SdmxJsonMessage {
   structure?: SdmxStructure;
   structures?: SdmxStructure[];
   dataSets?: SdmxDataSet[];
   data?: { structure?: SdmxStructure; structures?: SdmxStructure[]; dataSets?: SdmxDataSet[] };
 }
 
-interface ParsedObs {
+export interface ParsedObs {
   seriesDims: Record<string, string>;
   time: string;
   value: number;
@@ -73,7 +73,7 @@ interface ParsedObs {
 }
 
 /** Flatten every observation across every series in an SDMX-JSON compact message. */
-function parseSdmxJson(msg: SdmxJsonMessage): ParsedObs[] {
+export function parseSdmxJson(msg: SdmxJsonMessage): ParsedObs[] {
   const out: ParsedObs[] = [];
   const structure =
     msg.structure ?? msg.structures?.[0] ?? msg.data?.structure ?? msg.data?.structures?.[0];
@@ -106,20 +106,20 @@ function parseSdmxJson(msg: SdmxJsonMessage): ParsedObs[] {
 }
 
 /** Pick the observation with the highest TIME_PERIOD from a flat obs list. */
-function latest(obs: ParsedObs[]): ParsedObs | undefined {
+export function latest(obs: ParsedObs[]): ParsedObs | undefined {
   return obs.slice().sort((a, b) => b.time.localeCompare(a.time))[0];
 }
 
 /** Latest DEFINITIVE (non-provisional) observation — the last official 1-Jan figure. */
-function latestDefinitive(obs: ParsedObs[]): ParsedObs | undefined {
+export function latestDefinitive(obs: ParsedObs[]): ParsedObs | undefined {
   const def = obs.filter((o) => !o.provisional);
   return latest(def.length ? def : obs);
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-const AGE_BRACKETS_0_14 = ["Y_UN4", "Y5-9", "Y10-14"];
-const AGE_BRACKETS_15_64 = [
+export const AGE_BRACKETS_0_14 = ["Y_UN4", "Y5-9", "Y10-14"];
+export const AGE_BRACKETS_15_64 = [
   "Y15-19",
   "Y20-24",
   "Y25-29",
@@ -131,7 +131,7 @@ const AGE_BRACKETS_15_64 = [
   "Y55-59",
   "Y60-64",
 ];
-const AGE_BRACKETS_65_PLUS = [
+export const AGE_BRACKETS_65_PLUS = [
   "Y65-69",
   "Y70-74",
   "Y75-79",
@@ -162,7 +162,7 @@ async function fetchAgeStructure(): Promise<ParsedObs[]> {
   return all.filter((o) => o.seriesDims.GENDER === "T");
 }
 
-function sumBrackets(obs: ParsedObs[], brackets: string[]): number {
+export function sumBrackets(obs: ParsedObs[], brackets: string[]): number {
   return obs
     .filter((o) => brackets.includes(o.seriesDims.AGE_CLASS))
     .reduce((sum, o) => sum + o.value, 0);
