@@ -11,8 +11,10 @@ import {
   getOrganigramma,
 } from "@/lib/data/repository";
 import type { QaBody } from "@/lib/model/types";
+import { headers } from "next/headers";
 import { answerWithSql } from "@/lib/query/engine";
 import { isQueryEnabled } from "@/lib/query/provider";
+import { clientIp, rateLimit } from "@/lib/ratelimit";
 import { AnswerView } from "@/components/features/AnswerView";
 import { SqlResults, SqlSources } from "@/components/features/answers/SqlAnswer";
 import { Giunta } from "@/components/features/answers/Giunta";
@@ -99,7 +101,14 @@ export default async function ChiediAnswerPage({
   // ---- NL→SQL engine: for a no-match OR a specific/analytic question, try a
   // live generated query first; if it can't answer, fall through to the curated
   // topic answer (or nomatch) below. ----
-  if (q && isQueryEnabled() && (id === "nomatch" || analytic)) {
+  if (
+    q &&
+    isQueryEnabled() &&
+    (id === "nomatch" || analytic) &&
+    // Rate-limit the expensive LLM path per client IP; over the limit we simply
+    // fall through to the curated answer below.
+    (await rateLimit("sql", clientIp(await headers()), 20, 60))
+  ) {
     const result = await answerWithSql(q);
     if (result && result.rows.length > 0) {
       const srcs = await getSourcesByIds(result.sourceIds);

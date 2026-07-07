@@ -129,3 +129,18 @@ test("execReadOnly runs as the least-privilege role, blocking foreign schemas wh
   // Bypasses the parser on purpose: even a raw foreign-table read must be denied by the DB.
   await expect(execReadOnly("select 1 from auth.users")).rejects.toThrow();
 });
+
+test("Data API roles (anon/authenticated) are locked out of public tables (migration 0003)", async () => {
+  // Migration 0003 enables RLS + revokes grants, so the Supabase Data API roles
+  // — reachable with the public anon key — can neither read nor write civic data.
+  // Runs as the app owner (postgres), which SET ROLEs into these built-in roles.
+  for (const role of ["anon", "authenticated"]) {
+    await expect(
+      sql.begin(async (tx) => {
+        await tx.unsafe(`set local role ${role}`);
+        await tx.unsafe("select 1 from fact_budget limit 1");
+      }),
+      role,
+    ).rejects.toThrow();
+  }
+});
