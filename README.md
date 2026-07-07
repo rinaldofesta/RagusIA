@@ -122,15 +122,18 @@ ISPRA, EEA, MIM, ICCU.
 > Ingestion runs as a script/cron job (never a request path); it may shell out to `curl` for
 > endpoints incompatible with Node's fetch (ISTAT). Recommended cadence: daily/weekly per source.
 
-## Deploy (later)
+## Deploy
 
-Provision a hosted Supabase project, `supabase link`, push migrations, set `DATABASE_URL` in the
-Vercel project env, run the seed against the hosted DB, then deploy.
+Step-by-step runbook in **`docs/DEPLOY.md`**: provision hosted Supabase, push migrations, seed,
+deploy to Vercel (transaction-pooler connection for serverless), repoint the ingest Action, and
+optionally activate the `query_reader` backstop. A `GET /api/health` endpoint reports DB
+connectivity, source health, and whether the DB backstop is active — for uptime monitoring.
 
 ## Documentation map
 
 - `docs/adr/` — architecture decision records (the current, binding decisions)
 - `docs/ROADMAP.md` — staged next steps toward a solid production deployment
+- `docs/DEPLOY.md` — hosted Supabase + Vercel deploy runbook
 - `docs/superpowers/specs/` + `docs/superpowers/plans/` — **historical** design spec and phase
   plans (annotated; where they disagree with this README, the README wins)
 - `design/phase2-research/` — per-source live-endpoint research notes

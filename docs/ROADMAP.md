@@ -39,6 +39,11 @@ recorded-fixture tests.*
 *Definition of done: production on Vercel + hosted Supabase; daily-changing data served from
 cache; guard rails hold against the hosted DB.*
 
+> **Status:** the code-side prep is merged — pool tuning (3.1), `/api/health` (3.4), and the
+> secondary indexes (3.5, migration 0005). The interactive deploy (3.1 provisioning, 3.2 Vercel),
+> the dedicated-role activation (M2.5), and caching (3.3) need cloud accounts and are captured as
+> a runbook in `docs/DEPLOY.md`.
+
 | # | Item | Why | Size |
 |---|---|---|---|
 | 3.1 | **Hosted Supabase** — provision, `supabase link`, push migrations 0000–0003, seed, disable public Data API exposure, repoint the Action's `DATABASE_URL` secret. Pool tuning in `lib/db/client.ts` (`max` ≈ 5, `idle_timeout`) for serverless. (Connect as the dedicated app role from M2.5 so the `query_reader` backstop is live, not the reserved `postgres`.) | Deploy prerequisite | M |
