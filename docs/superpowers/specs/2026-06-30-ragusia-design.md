@@ -1,5 +1,11 @@
 # RagusIA — Design Spec
 
+> **Status (2026-07-07): historical.** This spec pre-dates Phase 2 and the NL→SQL query engine.
+> Known deltas: the adapter interface is now `fetch()`/`apply()` (`LiveAdapter`, not `load()`);
+> the health examples are live-derived, not static; a NL→SQL engine with a least-privilege DB
+> role was added after this spec. Current architecture: `README.md` §Architecture. The §10
+> resolved decisions are superseded/expanded by `docs/adr/`.
+
 > _crevit ragusia hyblae ruinis_ — Intelligenza civica per il Comune di Ragusa.
 > Source design: `Ragusia.dc.html` (Claude Design project "Ibla — Civic intelligence platform",
 > `c79597f0-6b3e-4b38-9350-224928905cd4`). Date: 2026-06-30.

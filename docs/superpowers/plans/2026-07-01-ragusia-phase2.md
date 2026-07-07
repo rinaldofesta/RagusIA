@@ -1,5 +1,9 @@
 # RagusIA Phase 2 — Live Data Ingestion
 
+> **Status (2026-07-07): executed, historical.** After this plan: an **ANAC** adapter was added
+> (commit `699609f`; not in the matrix below), and the count-guard evolved from a logged alert to
+> a verify-before-write **block** (ADR-0002). Current state: `README.md` §Live data ingestion.
+
 **Goal:** Replace Phase-1 seed data with **live Italian open-data** for the Comune di Ragusa, source by source, behind the existing adapter seam — repository + UI unchanged.
 
 **Approach:** Each source has a `LiveAdapter` (`lib/data/adapters/sources/<id>.ts`) that `fetch()`es live data + `apply()`s it (idempotent Drizzle upsert) into the object-model tables. The `pnpm ingest [source]` CLI (`lib/data/ingest/`) runs adapters and updates each source's **real provenance + health**: success → `ok` with fresh `retrieved`/`rows`/`observed`; failure → last-good data is preserved and the source flips to `warn` ("a rischio") — the design's ingestion-health model made real. The app keeps reading from Postgres.

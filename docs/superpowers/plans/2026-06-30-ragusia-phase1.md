@@ -1,5 +1,9 @@
 # RagusIA Phase 1 — Implementation Plan
 
+> **Status (2026-07-07): executed, historical.** Env vars changed since: `OPENAI_API_KEY` was
+> replaced by the Vercel AI Gateway configuration (`EMBEDDINGS_PROVIDER=gateway`; see
+> `.env.example` and ADR-0003). Current architecture: `README.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build RagusIA — a provenance-first civic-intelligence app for the Comune di Ragusa — as a real Next.js + TypeScript + Tailwind v4 + Supabase application, faithfully reproducing all 14 surfaces of `Ragusia.dc.html` against a typed object model seeded into Postgres, with the ingestion/provenance architecture and pgvector retrieval wired (optional) behind a deterministic fallback.

@@ -57,10 +57,17 @@ Read this guide, then your task brief, then port the markup from `design/referen
 `getDomainDetail(slug)`, `getBilancio()`, `getAppalti()`, `getOrganigramma()`, `getElezione()`,
 `getGraph() → { nodes, links, types, W, H }`, `getMap() → { layers, markers }`,
 `getDocuments()`, `getDocSections() → { trasparente, albo }`, `searchDocuments(q, filter?)`,
-`getQA(id)`, `getService(id)`, `routeQuestion(q) → { kind: "qa"|"service"|"nomatch", id }`.
+`getQA(id)`, `getService(id)`, `routeQuestion(q) → { kind: "qa"|"service"|"nomatch", id, analytic }`.
 All model types are in `@/lib/model/types` (Source, Entity, Kpi, Bar, DomainCard, DomainDetail,
 BilancioData, AppaltiData, Organigramma, Elezione, DocItem, DocSection, MapLayer, MapMarker,
 GraphNode, GraphLink, GraphTypeMeta, QA, Service, SuggestedQuestion, ContrattoRow, CapitoloRow, …).
+
+## Chiedi answer paths
+The `/chiedi` page resolves a question in order: analytic questions (`routeQuestion(q).analytic`,
+via `isAnalytic()` in `@/lib/search/matcher`) first try the NL→SQL engine
+(`answerWithSql()` in `@/lib/query/engine`, only when `QUERY_PROVIDER` is configured), then fall
+back to the curated matcher; non-analytic questions go curated-first. A SQL answer renders as
+another provenance-cited block (`SqlAnswer`) — surface builders don't special-case it.
 
 ## Routes (surface → path)
 `/` Chiedi home · `/chiedi?q=&qa=` answer · `/esplora` · `/domini` · `/domini/bilancio` ·
