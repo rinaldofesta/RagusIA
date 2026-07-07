@@ -40,7 +40,7 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: 2.105.0
-      - run: supabase start
+      - run: supabase start --debug
       - name: Seed
         run: pnpm exec tsx lib/db/seed.ts
 
