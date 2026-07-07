@@ -67,7 +67,10 @@ export default async function ChiediAnswerPage({
 }: {
   searchParams: Promise<{ q?: string; qa?: string }>;
 }) {
-  const { q, qa: qaParam } = await searchParams;
+  const { q: qRaw, qa: qaParam } = await searchParams;
+  // Bound the free-text question before it reaches routing or the LLM — an
+  // unbounded `q` from the URL must not flow into the query engine.
+  const q = qRaw && qRaw.length > 500 ? qRaw.slice(0, 500) : qRaw;
 
   // Resolve the target id: explicit `qa` wins, else route the free-text question.
   let id: string;

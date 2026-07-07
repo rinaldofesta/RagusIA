@@ -2,6 +2,7 @@
   "name": "ragusia",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.5.2",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -16,7 +17,6 @@
     "ingest": "dotenv -e .env -- tsx lib/data/ingest/run.ts"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.3",
     "ai": "^7.0.6",
     "csv-parse": "^7.0.0",
     "drizzle-orm": "^0.45.2",

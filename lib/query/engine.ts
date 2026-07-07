@@ -36,13 +36,15 @@ export function extractSql(raw: string): string {
 // Single source of truth for what the engine may touch. Fact tables carry the
 // source they attribute to; entities/sources are readable metadata (no source).
 // SCHEMA_CONTEXT (the prompt) describes these same tables — keep them in sync.
-const FACT_SOURCES: Record<string, string> = {
+// Exported so a test can assert they stay in sync with the Drizzle schema and the
+// SCHEMA_CONTEXT prompt (the 3-place invariant in ADR-0001).
+export const FACT_SOURCES: Record<string, string> = {
   fact_contracts: "anac",
   fact_budget: "bdap",
   fact_pnrr: "openpnrr",
   fact_coesione: "opencoesione",
 };
-const ALLOWED_TABLES = new Set([...Object.keys(FACT_SOURCES), "entities", "sources"]);
+export const ALLOWED_TABLES = new Set([...Object.keys(FACT_SOURCES), "entities", "sources"]);
 
 // Catalog functions / role-introspection tokens that never belong in a fact
 // query and would disclose the DB role, version, or filesystem.
@@ -202,31 +204,50 @@ export function ensureLimit(q: string, cap = ROW_CAP): string {
 const QUERY_ROLE_RAW = (process.env.QUERY_DB_ROLE ?? "query_reader").trim();
 const QUERY_ROLE = /^[a-z_][a-z0-9_]*$/.test(QUERY_ROLE_RAW) ? QUERY_ROLE_RAW : "";
 
-// Probe once per process whether the app role can SET ROLE into the reader role
-// (i.e. the migration ran). If not, degrade gracefully — the app-layer allowlist
-// still guards every query. Cached so it costs one round trip, ever.
+// Probe once per process whether the app role can actually SET ROLE into the
+// reader role. We test the real operation rather than pg_has_role(...,'MEMBER'):
+// that check yields a false positive under Supabase, where the `postgres` role
+// holds ADMIN on query_reader (it created it) yet is DENIED SET ROLE (PG16 splits
+// membership from the SET privilege) and cannot be granted WITH SET (supautils
+// rejects grants to the reserved `postgres` role). When SET ROLE isn't possible,
+// degrade gracefully — the app-layer allowlist + read-only tx still guard every
+// query. Cached so it costs one probe, ever.
 let roleAvailable: Promise<boolean> | null = null;
 function queryRoleAvailable(): Promise<boolean> {
   if (!QUERY_ROLE) return Promise.resolve(false);
   if (!roleAvailable) {
-    // 'MEMBER' (not 'USAGE'): SET ROLE needs membership, which holds even for a
-    // NOINHERIT app role — migration 0002 grants it WITH SET TRUE. USAGE tests
-    // privilege inheritance, so it would miss a NOINHERIT role and silently
-    // leave the boundary off.
-    roleAvailable = sql`select coalesce((select pg_has_role(current_user, ${QUERY_ROLE}, 'MEMBER') from pg_roles where rolname = ${QUERY_ROLE} limit 1), false) as ok`
-      .then((r) => Boolean((r as unknown as { ok: boolean }[])[0]?.ok))
-      .catch(() => {
-        roleAvailable = null; // transient failure: don't cache — retry next call
+    roleAvailable = sql
+      .begin(async (tx) => {
+        await tx.unsafe(`set local role ${QUERY_ROLE}`);
+      })
+      .then(() => true)
+      .catch((e: { code?: string }) => {
+        // 42501 = permission denied to set role: persistent, cache the false.
+        // Anything else (role missing, connection error) may be transient —
+        // clear the cache so the next call re-probes.
+        if (e?.code !== "42501") roleAvailable = null;
         return false;
       });
   }
   return roleAvailable;
 }
 
+// One-time loudness: if the query engine is live but the least-privilege role
+// isn't (migration 0002 didn't run), the DB boundary has silently degraded to the
+// app role + allowlist. Say so once, at error level. The /api/health endpoint
+// (roadmap M3) will surface the same flag.
+let warnedNoRole = false;
+
 /** Execute a validated SELECT inside a READ ONLY transaction (timeout + rollback),
  *  dropped into the least-privilege reader role when available. */
 export async function execReadOnly(query: string): Promise<Record<string, unknown>[]> {
   const useRole = await queryRoleAvailable();
+  if (!useRole && isQueryEnabled() && !warnedNoRole) {
+    warnedNoRole = true;
+    console.error(
+      "[query] query_reader role unavailable — generated SQL runs as the app role; apply migration 0002 to restore the least-privilege boundary.",
+    );
+  }
   return sql.begin(async (tx) => {
     await tx.unsafe("set transaction read only");
     await tx.unsafe("set local statement_timeout = 4000");
