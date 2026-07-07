@@ -35,9 +35,12 @@ jobs:
       - run: pnpm typecheck
 
       # Bring up Postgres + apply migrations (incl. 0002 query_reader), then seed.
+      # Pinned to the local dev version (not `latest`): its migration splitter
+      # applies the 0002 `do $$ … $$` blocks cleanly, and pinning keeps CI
+      # reproducible instead of drifting with each new CLI release.
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.105.0
       - run: supabase start
       - name: Seed
         run: pnpm exec tsx lib/db/seed.ts
