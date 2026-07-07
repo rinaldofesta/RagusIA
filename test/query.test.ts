@@ -115,9 +115,17 @@ test("execReadOnly refuses to write (read-only transaction)", async () => {
   ).rejects.toThrow();
 });
 
-test("execReadOnly runs as the least-privilege role, blocking foreign schemas when provisioned (migration 0002)", async () => {
-  const rows = (await sql`select coalesce((select pg_has_role(current_user, 'query_reader', 'MEMBER') from pg_roles where rolname = 'query_reader' limit 1), false) as ok`) as unknown as { ok: boolean }[];
-  if (!rows[0]?.ok) return; // role not provisioned here — the app-layer allowlist is the boundary
+test("execReadOnly runs as the least-privilege role, blocking foreign schemas when the role is assumable (migration 0002)", async () => {
+  // Guard on the REAL capability, not pg_has_role('MEMBER'): under Supabase the
+  // app's `postgres` role holds ADMIN on query_reader yet cannot SET ROLE into
+  // it, so the DB boundary is inert and the allowlist is what guards queries.
+  const canSetRole = await sql
+    .begin(async (tx) => {
+      await tx.unsafe("set local role query_reader");
+    })
+    .then(() => true)
+    .catch(() => false);
+  if (!canSetRole) return; // role not assumable here — the app-layer allowlist is the boundary
   // Bypasses the parser on purpose: even a raw foreign-table read must be denied by the DB.
   await expect(execReadOnly("select 1 from auth.users")).rejects.toThrow();
 });
