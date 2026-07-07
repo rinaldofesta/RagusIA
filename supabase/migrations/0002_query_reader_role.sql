@@ -10,14 +10,18 @@
 -- Note: pg_catalog / information_schema stay readable by PUBLIC as in stock
 -- Postgres; the app-layer BLOCKED_TOKEN guard (pg_*, current_*, version, …)
 -- covers catalog introspection. The role closes the high-value gap (auth/vault).
+--
+-- The DO blocks use a NAMED dollar-quote tag ($do$), not bare $$: the Supabase
+-- CLI migration splitter doesn't treat bare $$ as a quote boundary and splits on
+-- the `;` inside the block ("unexpected EOF" on `supabase db reset`/`start`).
 
-do $$
+do $do$
 begin
   if not exists (select 1 from pg_roles where rolname = 'query_reader') then
     create role query_reader nologin;
   end if;
 end
-$$;
+$do$;
 
 -- SELECT on exactly the six tables the engine is allowed to read; nothing else.
 revoke all on all tables in schema public from query_reader;
@@ -28,7 +32,7 @@ grant select on
 
 -- Let the application role drop into query_reader for the read-only tx. PG16+
 -- requires WITH SET TRUE for SET ROLE; earlier versions grant SET by default.
-do $$
+do $do$
 begin
   if current_setting('server_version_num')::int >= 160000 then
     execute 'grant query_reader to current_user with set true';
@@ -36,4 +40,4 @@ begin
     execute 'grant query_reader to current_user';
   end if;
 end
-$$;
+$do$;
